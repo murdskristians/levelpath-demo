@@ -1,0 +1,19 @@
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+
+# Secrets: only .env.sample is committed
+.env
+.env.*
+!.env.sample
+
+# Harness runtime output (used from Phase 1)
+agents/
+trees/
+logs/
+
+# Tooling
+graphify-out/
+.DS_Store
+Thumbs.db
