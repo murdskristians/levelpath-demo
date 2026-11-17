@@ -1,0 +1,20 @@
+# Credits
+
+This repo's agent harness is built from three earlier harnesses. What came from where, and what changed, is in [docs/HARNESS.md](docs/HARNESS.md) and [docs/HARNESS_CHANGELOG.md](docs/HARNESS_CHANGELOG.md).
+
+## Software Factory for Claude Code (v2), by ZazenCodes
+
+- Source: <https://github.com/zazencodes/zazencodes-season-3/tree/main/src/software-factory-claude-code-v2>
+- Via the Windows-ready fork: <https://github.com/murdskristians/zazencodes-season-3/tree/main/src/software-factory-claude-code-v2>
+- Licence: **GPLv3**. The files taken from it and the ones adapted from it are distributed under GPLv3, which is why this repository is GPLv3 (see [LICENSE](LICENSE)).
+- Used for: the `/factory` skill, `factory/bin/{job,gate,route,port}`, `factory/dashboard.html`, and the intake, builder, approver and reviewer agents the roles are built from.
+
+## Tactical Agentic Coding and multi-agent orchestration, by IndyDevDan
+
+- The AI Developer Workflow (ADW) design behind `adws/` (via [git-adw](https://github.com/murdskristians/git-adw)).
+- The orchestrator's agent templates and the `meta-prompt` skill (via [tac-combined](https://github.com/murdskristians/tac-combined), a fork of [multi-agent-orchestration](https://github.com/murdskristians/multi-agent-orchestration)).
+- All credit for the original architecture belongs to IndyDevDan.
+
+## This repo
+
+The Windows ports, the no-merge rule, the shared roles and their three drivers, the guard hooks, the skills and the app are by Chris (murdskristians).

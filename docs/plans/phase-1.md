@@ -58,7 +58,7 @@ I stop and wait at three points so you can commit.
 
 ## Step 2: Import as-is → Stop A
 
-**Done 2026-11-17**: commit `7cb2738` (76 files from the three sources, unmodified).
+**Done 2026-11-17**: commit `bc3b798` (76 files from the three sources, unmodified).
 
 Copied unmodified, each source pinned to a commit:
 
@@ -135,6 +135,8 @@ Copied unmodified, each source pinned to a commit:
 - **I1 Commands:** `/intent`, `/spec`, `/plan` (writes `.claude/task-type`), `/verify`, `/review` (parallel reviewers, REVIEW.md, nit cap), and `/try <pr>`.
 
 ## Step 4: Fill the gaps
+
+**Done 2026-11-17**: the 4 skills, `docs/HARNESS.md`, `LICENSE` (GPLv3), `CREDITS.md`, and 9 `docs/LEARNING.md` entries. `REVIEW.md` and the templates came with Step 3.
 
 - **Skills:** `nestjs-endpoint`, `rls-data-access`, `llm-call`, and `feature-workflow` (the three drivers).
 - **Review and templates:** `REVIEW.md` and `docs/templates/{intent,spec,plan}.md`.

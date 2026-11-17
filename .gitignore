@@ -24,3 +24,6 @@ __pycache__/
 graphify-out/
 .DS_Store
 Thumbs.db
+
+# The private project brief (kept out of the public repo; history rewritten 2026-11-17)
+KICKOFF.md

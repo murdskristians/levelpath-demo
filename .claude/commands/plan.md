@@ -6,7 +6,7 @@ argument-hint: <slug>
 # Plan
 
 Write the implementation plan for a spec with the `planner` agent, then wait
-for Chris's approval before any file is edited (KICKOFF: plan before code).
+for Chris's approval before any file is edited (project rule: plan before code).
 
 ## Variables
 

@@ -1,0 +1,62 @@
+# levelpath-demo
+
+A small multi-tenant purchase-request app (tenants, requesters and approvers, suppliers, purchase requests and approvals), built **through** a visible agent harness. Specs live in markdown, agents do most of the typing, and a person steers, reviews and merges. Tenant isolation is enforced by Postgres row-level security, not only by application code.
+
+Stack: NestJS 12 (ESM), PostgreSQL with RLS, React 19 + Vite, TypeScript everywhere, pnpm workspaces, Docker Compose.
+
+## The harness
+
+One set of agent roles, three ways to drive them (the autonomy dial):
+
+```
+ L1 pair        /intent → /spec → /plan → build together → /verify → /review
+ L2 supervised  /factory run <issue>            (a skill in a Claude Code session, with a dashboard)
+ L3 unattended  uv run adws/adw_sdlc_iso.py <issue>, or an `adw` comment on the issue
+ ─────────────────────────────────────────────────────────────────────────────
+ roles   intake · scout · planner · builder · verifier · reviewer-bugs · reviewer-spec · reviewer-security · approver
+ gate    factory/checks.sh        guards   .claude/hooks/guard.py        rules   REVIEW.md · CLAUDE.md · skills
+ end     a ready PR that only a person merges
+```
+
+- **What it is:** [docs/HARNESS.md](docs/HARNESS.md).
+- **Where each part came from**, and how it was combined from three earlier harnesses: [CREDITS.md](CREDITS.md).
+- **How it evolved:** [docs/HARNESS_CHANGELOG.md](docs/HARNESS_CHANGELOG.md), every change as before → after → why.
+
+## Run the app
+
+Needs Node 24, pnpm 10 and Docker.
+
+```bash
+pnpm install
+pnpm dev      # Postgres (healthy), the API on :3000, the web app on :5173
+pnpm build    # all three must exit 0; CI and the harness's gate run the same
+pnpm lint
+pnpm test
+```
+
+## Use the harness
+
+Also needs [Claude Code](https://claude.com/claude-code), `gh` (logged in), `uv` and Python 3.11+.
+
+- **Pair (L1):** open Claude Code here and run `/intent <idea>`.
+- **Supervised (L2):** label an issue `factory`, then `/factory run <n>`. Watch it on the dashboard: `cd factory && python3 -m http.server`, then open http://localhost:8000/dashboard.html.
+- **Unattended (L3):** `uv run adws/adw_sdlc_iso.py <n>`, or start `uv run adws/adw_triggers/trigger_cron.py` and comment `adw` on the issue.
+
+Each driver ends with a pull request labelled `factory:needs-human`. To check it locally, run `/try <pr>`; then merge it on GitHub. Nothing in the harness can merge.
+
+## Layout
+
+```
+apps/api           NestJS API          apps/web      React SPA        packages/shared   Zod schemas
+db/                migrations, RLS     evals/        LLM-feature evals
+docs/              intent/ specs/ plans/ templates/ · HARNESS.md · HARNESS_CHANGELOG.md · LEARNING.md
+.claude/           agents/ (roles) · commands/ (L1) · skills/ · hooks/ · settings.json
+factory/           L2: bin/job (state machine) · bin/gate · bin/route · checks.sh · config.json · dashboard
+adws/              L3: headless pipeline over the same roles
+```
+
+`docs/plans/` refers to the project brief (`KICKOFF.md`), which is kept private.
+
+## Licence
+
+GPLv3, because the harness includes code from the GPLv3 [ZazenCodes software factory](https://github.com/zazencodes/zazencodes-season-3/tree/main/src/software-factory-claude-code-v2). See [LICENSE](LICENSE) and [CREDITS.md](CREDITS.md).
