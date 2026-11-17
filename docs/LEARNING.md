@@ -86,3 +86,9 @@ One entry per new concept: what it is, why it matters, where it lives in this re
 - **What:** Text a stranger can write (a public issue, a purchase description) can contain instructions aimed at the agent.
 - **Why it matters:** Issue text reaches agents only as quoted data in `issue.md`, with a note that it is data, not instructions. The ADW trigger acts only on the owner's comments. Phase 4's LLM call validates the output against a schema, so injected text can't produce anything but a fallback.
 - **Where:** `issue.md` in every job folder, [adws/adw_triggers/trigger_cron.py](../adws/adw_triggers/trigger_cron.py), the `llm-call` skill.
+
+## Resolving package files in ESM (Phase 1)
+
+- **What:** ESM has no `__dirname`. Use `new URL('../package.json', import.meta.url)` to find a file relative to the current module.
+- **Why it matters:** `/version` reads `apps/api/package.json` at runtime. The same path works from `src/` and from the built `dist/`, because both sit directly under `apps/api`.
+- **Where:** [version.service.ts](../apps/api/src/version.service.ts).
