@@ -10,6 +10,15 @@ export default tseslint.config(
       '**/coverage/**',
       'graphify-out/**',
       'KICKOFF.md',
+      // Harness: imported prompts and scripts stay verbatim; runtime folders hold
+      // full checkouts of this repo that must not be linted twice.
+      '.claude/**',
+      'adws/**',
+      'factory/**',
+      '.worktrees/**',
+      'trees/**',
+      'agents/**',
+      'logs/**',
     ],
   },
   js.configs.recommended,

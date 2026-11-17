@@ -4,3 +4,13 @@ coverage
 pnpm-lock.yaml
 graphify-out
 KICKOFF.md
+
+# Harness: imported prompts, scripts and docs stay verbatim
+.claude/
+adws/
+factory/
+CLAUDE.md
+.worktrees/
+trees/
+agents/
+logs/

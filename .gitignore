@@ -8,10 +8,17 @@ coverage/
 .env.*
 !.env.sample
 
-# Harness runtime output (used from Phase 1)
-agents/
-trees/
-logs/
+# Harness runtime output. Anchored with a leading / so that `agents/` doesn't
+# also hide .claude/agents/.
+/agents/
+/trees/
+/logs/
+/factory/jobs/
+/.worktrees/
+.ports.env
+.claude/settings.local.json
+__pycache__/
+.venv/
 
 # Tooling
 graphify-out/
