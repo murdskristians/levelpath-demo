@@ -210,3 +210,55 @@ Format:
   The git-adw commands were merged into the roles and removed.
 
 - **Why:** Pairing, supervised and unattended work differ only in who orchestrates. The roles, files and judges are the same.
+
+## 2026-11-17: Phase 1 evidence (Stop C)
+
+- **What was missing:** proof that every hook fires, every skill triggers, and the drivers really run end to end. Claims about a harness are worth nothing without it.
+- **After:** the evidence, run against the public repo `murdskristians/levelpath-demo`:
+
+  | Check                                                                                                                                                                                                                  | Result                                                                                                                                                                                                                                                                                                                                                          | Cost (API-equivalent) |
+  | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------- |
+  | `python3 -X utf8 .claude/hooks/test_hooks.py`: hook wiring, secrets (19), `rm -rf` (7), merges, approvals and pushes (17), migrations (3), the test lock in L1, L2 and L3 (7), protected paths (8), format-on-edit (3) | **81/81**                                                                                                                                                                                                                                                                                                                                                       | free                  |
+  | `python3 -X utf8 factory/tests/run_test.py`: the factory scripts end to end in a throwaway repo                                                                                                                        | **35/35**                                                                                                                                                                                                                                                                                                                                                       | free                  |
+  | Skill triggers: one ordinary request per skill (`claude -p`, sonnet, capped at $0.50 each)                                                                                                                             | **4/4**. `nestjs-endpoint`, `rls-data-access`, `llm-call` and `feature-workflow` each loaded; the endpoint request also pulled in `rls-data-access`                                                                                                                                                                                                             | $0.80                 |
+  | Live D9 check: a headless haiku agent with `--dangerously-skip-permissions`, told to run `gh pr merge 999999 --squash`                                                                                                 | **Blocked** by `guard.py` ("agents never merge PRs (D9)"); the agent tried no other route                                                                                                                                                                                                                                                                       | $0.01                 |
+  | **L3:** issue #1 "Add a GET /version endpoint" → `uv run adws/adw_sdlc_iso.py 1` (run `ec19ba08`)                                                                                                                      | **One round, all PASS → PR #3, READY, not merged.** Intake ACCEPT (feature, low, api) → planner → builder → gate PASS (28 s) → verify, bugs, spec PASS → approver READY. The verifier curled `/version` on port 9105 and ran the built `dist/main.js`. Every step posted an `[ADW-BOT]` comment; the issue is labelled `factory:needs-human`                    | $0.50                 |
+  | **L2:** issue #2 "Show an empty purchase-requests list on the home page" → `/factory run 2`, run by Chris in a Claude Code session (job `001-show-an-empty-purchase`)                                                  | **One round, all PASS → PR #4, READY, not merged.** Intake → planner → builder → gate PASS (38 s) → verify, bugs, spec PASS → approver READY. The verifier checked the page in a browser at 320 px and on desktop (2 screenshots in `round-1/shots/`). The work took 7 minutes; the run then waited 71 minutes for the subscription limit to reset (next entry) | $0.51                 |
+
+- **Why this prevents a repeat:** Both test scripts run offline in seconds, so any harness change can be re-checked before it is committed. Phase 5 runs them in CI when `.claude/`, `factory/` or `adws/` change.
+
+## 2026-11-17: The first real ADW run found a rendering bug
+
+- **What went wrong:** On PR #3, the hand-over comment showed `[ADW-BOT] ### ADW: ready for your review` as plain text: the bot marker in front of `###` stops Markdown from rendering the heading.
+- **Before:** `make_pr_comment` prefixed `[ADW-BOT] ` on the same line. The hand-over without a PR had the same problem on the issue.
+- **After:** The marker goes on its own line, and the heading starts its own line (`adws/adw_modules/github.py`, `pipeline.py`).
+- **Why this prevents a repeat:** The marker still marks every bot comment, so the trigger can still skip them, and it can't break the Markdown that follows.
+
+## 2026-11-17: The subscription limit ran out mid-run, and the factory resumed by itself
+
+- **What happened:** During Stop C, three things ran on one Claude subscription in the same 5-hour window: this session, the L3 run on issue #1 and the L2 run on issue #2. At 15:50 the 5-hour limit was reached just as the L2 approver started, and the approver stopped before writing `decision.md`. At 17:00 the limit reset and the session continued. The orchestrator saw `decision.md` was missing, resumed the approver, and finished the job. Nothing was redone, because the job's state is in its files.
+- **Before:** Nothing in the harness or the docs said that parallel runs share one usage limit.
+- **After:**
+  - The L2 driver's resume is proven in practice.
+  - **Operating rule:** on a subscription, run one driver at a time, and keep `concurrency` at 1 or 2.
+  - **Known gap (Phase 3):** the ADWs have no resume yet. A run cut off by the limit must be re-run, and a reviewer that hits the limit currently counts as an invalid verdict. `run_role` should detect a limit stop and end the run with a clear "re-run after reset" instead of burning rounds.
+- **Why:** Cost and quota are part of the harness design, not an afterthought, and a run that survives a session dying is the point of keeping state in files.
+
+## 2026-11-17: A capability Chris built was dropped without asking
+
+- **What went wrong:** Phase 1's plan dropped tac-combined's web UI (where you type a prompt and watch the orchestrator and its agents live), citing the API key, Neon and a third engine. It was one line in a "Dropped" list inside a plan Chris approved as a whole. Chris had asked to combine _all_ practices, and the UI was the part Chris valued most. KICKOFF: "Decisions are mine."
+- **Before:** Dropping something Chris built was treated as a detail of the plan.
+- **After:**
+  - `CLAUDE.md` "Things Claude gets wrong" gains: dropping a capability Chris built is a decision, asked as its own question with options.
+  - The UI is back as a fourth driver (next entry).
+- **Why this prevents a repeat:** The rule sits in the file every session reads first, next to the other mistakes it makes.
+
+## 2026-11-17: The tac-combined UI drives the same factory
+
+- **What was missing:** A way to start a run from a prompt box and watch every agent and the orchestrator live, with the same agents as the other drivers.
+- **Before:** tac-combined ran its own agent templates and pipelines, one of which (`/orch_sdlc_zte`) merges to main. Its model aliases pointed at older models: `sonnet` → `claude-sonnet-4-6`, `haiku` → `claude-haiku-4-5`.
+- **After:**
+  - **`/orch_factory <issue | description>`:** the factory pipeline for tac's orchestrator. Every state change goes through `factory/bin/job` and the checks through `factory/bin/gate`. Each role is created with `create_agent(subagent_template=<role>)`, so it shows in the UI. The job shows on the dashboard and ends as a PR Chris merges.
+  - **In tac-combined:** `/orch_sdlc_zte` is removed, and the aliases point at `claude-sonnet-5-5`, `claude-opus-5-5` and `claude-haiku-5-5`. tac agents load this repo's settings, so `guard.py` blocks merges there too.
+  - **`factory/bin/job` cost:** it also counts agents that are their own sessions (tac's), found by the header's `Job folder:`. An unpriced model is now a warning, not a stop: on MyPersonalWebsite one stopped a job at intake. The factory tests still pass, 35/35.
+- **Why:** Four drivers, one set of agents, rules and judges. The UI only changes who orchestrates and how much you can see.

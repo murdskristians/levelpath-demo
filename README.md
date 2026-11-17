@@ -11,6 +11,7 @@ One set of agent roles, three ways to drive them (the autonomy dial):
 ```
  L1 pair        /intent → /spec → /plan → build together → /verify → /review
  L2 supervised  /factory run <issue>            (a skill in a Claude Code session, with a dashboard)
+    or, live    /orch_factory <issue | idea>     (in the tac-combined orchestrator UI: every agent visible)
  L3 unattended  uv run adws/adw_sdlc_iso.py <issue>, or an `adw` comment on the issue
  ─────────────────────────────────────────────────────────────────────────────
  roles   intake · scout · planner · builder · verifier · reviewer-bugs · reviewer-spec · reviewer-security · approver

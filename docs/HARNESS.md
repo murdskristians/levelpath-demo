@@ -14,6 +14,7 @@ Every change from the originals is in [HARNESS_CHANGELOG.md](HARNESS_CHANGELOG.m
  drivers (who orchestrates)               same roles · same files · same gate · same guards
  L1 pair        you + /intent /spec /plan /verify /review
  L2 supervised  /factory run   (a skill in your Claude Code session, dashboard)
+    or, live    /orch_factory  (the tac-combined orchestrator UI: watch every agent work)
  L3 unattended  adws/          (Python, `claude -p --agent <role>`, an `adw` comment)
  ───────────────────────────────────────────────────────────────────────────────────
  roles      intake · scout · planner · builder · verifier ·

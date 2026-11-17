@@ -65,3 +65,5 @@ For behaviour, run the app on your ports and exercise the acceptance criteria (t
 ## Things Claude gets wrong
 
 - **Remembered library versions.** Before naming a library, runner or tool, check its current major, module format (ESM or CJS) and peer ranges with `pnpm view <pkg> dist-tags peerDependencies`. Phase 0 planned Jest for Nest 12, which is ESM-only, and `typescript@latest` (7.x), which `typescript-eslint` rejects.
+
+- **Dropping something Chris built inside a plan.** A capability from one of the source harnesses (for example tac-combined's live UI) is never dropped as one line of a plan: ask it as its own decision, with options and a recommendation.

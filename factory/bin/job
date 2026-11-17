@@ -297,25 +297,47 @@ def prompt_text(line):
     return " ".join(b.get("text", "") for b in content if isinstance(b, dict))
 
 
-def cost_usd(job):
-    """API-equivalent cost of every subagent whose prompt names this job's folder.
+def first_prompt(f):
+    """The first user prompt in a transcript: line 1 of a subagent's file, or the
+    first user message of a top-level session (which can start with other entries)."""
+    for _ in range(20):
+        line = f.readline()
+        if not line:
+            return ""
+        try:
+            entry = json.loads(line)
+        except ValueError:
+            continue
+        if isinstance(entry.get("message"), dict) and entry.get("type", "user") == "user":
+            return prompt_text(line)
+    return ""
 
-    Claude Code writes each subagent's messages, with model and token usage, to
-    <config>/projects/<project>/<session>/subagents/agent-<id>.jsonl. Every
-    factory prompt starts with `Job folder: <path>`, which ties a transcript to
-    its job across sessions.
+
+def cost_usd(job):
+    """API-equivalent cost of every agent whose first prompt names this job's folder.
+
+    Claude Code writes each agent's messages, with model and token usage, to
+    <config>/projects/<project>/<session>/subagents/agent-<id>.jsonl for a
+    subagent of `/factory run`, and to <config>/projects/<project>/<session>.jsonl
+    for an agent that is its own session, as the tac-combined orchestrator runs
+    them (`/orch_factory`). Every factory prompt starts with the job header, and
+    its `Job folder: <path>` ties a transcript to its job across sessions.
     """
     needle = norm_path(f"Job folder: {job_dir(job['id']).as_posix()}/")
     prices = CONFIG["prices_usd_per_mtok"]
     total = 0.0
-    for path in transcripts_dir().glob("*/subagents/agent-*.jsonl"):
+    transcripts = list(transcripts_dir().glob("*/subagents/agent-*.jsonl")) + list(transcripts_dir().glob("*.jsonl"))
+    for path in transcripts:
         with path.open(encoding="utf-8", errors="replace") as f:
-            first = f.readline()
-            if not first or needle not in norm_path(prompt_text(first)):
+            first = first_prompt(f)
+            if not first or needle not in norm_path(first):
                 continue
             usage_by_message = {}
             for line in f:
-                entry = json.loads(line)
+                try:
+                    entry = json.loads(line)
+                except ValueError:
+                    continue
                 msg = entry.get("message")
                 if entry.get("type") == "assistant" and isinstance(msg, dict) and msg.get("usage"):
                     usage_by_message[msg["id"]] = (msg["model"], msg["usage"])
@@ -325,7 +347,11 @@ def cost_usd(job):
             if tokens == 0:
                 continue
             if model not in prices:
-                die(f"no price for model {model} in factory/config.json prices_usd_per_mtok")
+                # Cost is a report, never a gate: an unpriced model must not stop the job
+                # (it did on MyPersonalWebsite, when intake ran on a new model).
+                print(f"job: no price for {model} in factory/config.json prices_usd_per_mtok; "
+                      "its tokens are left out of the cost", file=sys.stderr)
+                continue
             p = prices[model]
             split = u.get("cache_creation") or {}
             write_1h = split.get("ephemeral_1h_input_tokens", 0)

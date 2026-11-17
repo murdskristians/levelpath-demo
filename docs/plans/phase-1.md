@@ -146,6 +146,8 @@ Copied unmodified, each source pinned to a commit:
 
 ## Step 5: GitHub and evidence → Stop C
 
+**Done 2026-11-17.** L2 (issue #2 → PR #4) and L3 (issue #1 → PR #3) both ended READY in one round. The public repo `murdskristians/levelpath-demo` has the labels and branch protection on `main`. Evidence (hooks 81/81, factory scripts 35/35, skills 4/4, the live merge block, the L3 run → PR #3) is in `docs/HARNESS_CHANGELOG.md`, 2026-11-17.
+
 1. **Before the first public push**, you decide whether `KICKOFF.md` stays public. Then:
    - `gh repo create murdskristians/levelpath-demo --public` and push;
    - labels;

@@ -305,7 +305,7 @@ def hand_over(state: ADWState, logger) -> None:
         make_pr_comment(pr, body)
         say(state, "ops", f"Done: PR #{pr} is ready for your review. You merge it.")
     else:
-        say(state, "ops", body)
+        say(state, "ops", "no PR to hand over.\n\n" + body)  # the body's heading on its own line
     add_label(state.get("issue_number"), LABELS["needs_human"])
     state.update(stage="needs-human")
     state.save("needs-human")
