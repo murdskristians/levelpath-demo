@@ -1,9 +1,12 @@
 import { cleanup, render, screen } from '@testing-library/react';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { App } from './App';
 
 describe('App', () => {
-  afterEach(cleanup);
+  afterEach(() => {
+    cleanup();
+    vi.useRealTimers();
+  });
 
   it('renders the page heading', () => {
     render(<App />);
@@ -30,5 +33,13 @@ describe('App', () => {
 
     const button = screen.getByRole('button', { name: 'New request' }) as HTMLButtonElement;
     expect(button.disabled).toBe(true);
+  });
+
+  it('renders a footer with the app name and the current year', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2031, 5, 15));
+    render(<App />);
+
+    expect(screen.getByRole('contentinfo').textContent).toBe('Levelpath Demo · 2031');
   });
 });
