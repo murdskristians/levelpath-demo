@@ -20,8 +20,9 @@ intent → spec → plan → build → gate → verify + review → PR → Chris
 | --- | --- | --- | --- |
 | **L1 pair** | `/intent` → `/spec` → `/plan` → build together → `/verify` → `/review` | High risk or new to you: RLS, auth, the LLM call. You approve each step. | You |
 | **L2 supervised** | `/intent` → issue labelled `factory` → `/factory run <n>` | Several independent jobs at once, with intake, routing and the dashboard. | The `factory` skill in your session |
-| **L2, live UI** | `/orch_factory <n or idea>` in the tac-combined UI | The same run, watching every agent and the orchestrator live (API key). | tac-combined's orchestrator agent |
 | **L3 unattended** | an issue, then comment `adw` (trigger running) or `uv run adws/adw_sdlc_iso.py <n>` | Well-scoped work with no session open. | Python (`adws/`) |
+
+**Watch any of them** in the control room: `factory/bin/serve`, then http://127.0.0.1:8000. The Board shows every run's progress; the Agents tab shows each agent's actions live, plus the orchestrator. Its prompt box starts an L3 run.
 
 ## Where things live
 

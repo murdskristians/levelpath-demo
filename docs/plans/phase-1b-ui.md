@@ -1,51 +1,58 @@
-# Plan: Phase 1b, the orchestrator UI as a fourth driver, and one view of every run
+# Plan: Phase 1b, the control room
 
-Status: **Part A done 2026-11-17. Part B awaits Chris's approval.**
+Status: **Done 2026-11-17.**
 
 ## Why
 
-Phase 1 dropped tac-combined's web UI (API key, Neon, a third engine) as one line of the approved plan, without asking. That was a mistake, logged in `docs/HARNESS_CHANGELOG.md`. Chris wants all three ways of running work:
+Phase 1 dropped tac-combined's web UI (a prompt box, and the orchestrator and every agent visible live) as one line of the plan, without asking. That was a mistake, logged in `docs/HARNESS_CHANGELOG.md`.
 
-1. Claude chat + the factory dashboard.
-2. tac-combined's UI: type a prompt, watch the orchestrator and every agent live.
-3. An `adw` comment on an issue.
+Chris wants three things:
 
-All three should use the same agents. Chris also wants two views (agents at work, and the progress of tasks) that show every run, whichever driver started it. The API key and Neon are fine.
+- the same live experience;
+- two views over **every** run, whichever driver started it: the agents at work, and the progress of tasks;
+- **levelpath-demo to stand on its own**, with no code or settings from another project.
 
-## Part A: tac-combined drives the same factory (done)
+tac-combined is private course code (about 25,000 lines), and this repo is public. So the decision (Chris, 2026-11-17) was to **build our own UI here**, small and public, on the files every run already writes.
 
-- **`/orch_factory <issue | description>`** (in this repo's `.claude/commands/`, which tac-combined prefers over its own). The orchestrator runs the factory pipeline:
-  - **State and gate:** it uses `factory/bin/job` for every state change and `factory/bin/gate` for the checks.
-  - **Agents:** it creates each role with `create_agent(subagent_template=<role>)` and the routed model, so every agent appears in the UI.
-  - **Same everywhere:** the job's files, the dashboard, the labels and the end are the same as `/factory run`. It never merges.
-- **tac-combined** (Chris's repo):
-  - The auto-merging `/orch_sdlc_zte` is removed.
-  - The model aliases point at the current models (`sonnet` → `claude-sonnet-5-5`, `opus` → `claude-opus-5-5`, `haiku` → `claude-haiku-5-5`), so tac's agents run on the same models as the other drivers.
-  - Its agents load this repo's settings (`setting_sources=["project"]`), so `guard.py` applies to them too.
-- **Factory cost:** `job` now counts agents that are their own sessions (tac's), not only `/factory run` subagents. An unpriced model is a warning, never a stop. Factory script tests: 35/35.
-- **Chris does:** put `ANTHROPIC_API_KEY` and `ORCHESTRATOR_WORKING_DIR=C:/dev/LevelPath/levelpath-demo` in `tac-combined/.env` (secrets stay out of the agents' hands; Neon's `DATABASE_URL` is already there). Then start the backend and frontend and type `/orch_factory <issue>`.
+## What was built
 
-## Part B: two views, every driver (proposed)
+**`factory/bin/serve`: the control room.** It is stdlib Python and reachable from this machine only. Open http://127.0.0.1:8000.
 
-**Progress board (the factory dashboard view)**, built from files every driver already writes:
+- **Board:** every run's stage, rounds, verdicts, PR and cost, with a driver badge.
+  - `/factory run` jobs (`factory/jobs/<id>/`, badge **chat**).
+  - ADW runs (`agents/<adw_id>/`, badge **ADW**), shaped like factory jobs, so one board renders both.
+- **Agents:** a run's tab with each agent's actions live: what it says, every tool call and its result.
+  - ADW agents come from their stream logs (`agents/<id>/logs/`).
+  - `/factory run` subagents come from Claude Code's transcripts, found by the job header. Their `.meta.json` gives the role, model and whether the agent has finished.
+  - The orchestrator's decisions come first: the ADW pipeline's log, or the lines of your `/factory` session that name the job.
+- **Prompt box:** files the text as a GitHub issue and starts an unattended ADW run on it, detached so stopping the server never stops a run.
+- **Feedback box:** for an ADW run waiting on you (`adw_patch_iso.py`). Factory jobs take feedback in the Claude session, as before.
+- **Files:** each step's files, as before, now with the verifier's screenshots.
+- **Safety:**
+  - It binds `127.0.0.1` and refuses other `Host` headers (DNS rebinding).
+  - It serves only the run folders: never the repo, so never `.env`.
+  - Every POST needs an `X-Control-Room` header, which another site's page can't send.
 
-- **B1.** ADW runs also write `agents/<id>/job.json` in the factory's job schema (plus `"driver": "adw"`), on every state save.
-- **B2.** `factory/bin/dashboard`: a small server that only listens on localhost and serves `factory/` and the ADW run folders read-only. Today's `python3 -m http.server` would expose the whole repo, `.env` included, if run from the root. The dashboard shows factory jobs and ADW runs together, with a driver badge: chat, tac UI, or ADW.
-- **B3.** tac UI gets a **Board** tab with the same columns and cards, read from the same files through a new backend endpoint.
+**Standing alone:**
 
-**Agents view (tac's live view)**, for every driver:
+- `/orch_factory` (the command that lets tac-combined's UI drive this factory) moved into tac-combined's own toolkit. tac-combined still works with this repo, privately, and this repo doesn't need it.
+- `CREDITS.md` no longer links to private repositories.
 
-- **B4.** A watcher in tac's backend follows the transcripts of agents it didn't start:
-  - `/factory run` subagents: `~/.claude/projects/<repo>/<session>/subagents/*.jsonl`, matched to their job by the header's `Job folder:`.
-  - ADW agents: `agents/<id>/logs/*.jsonl`.
+## Verification (done)
 
-  It records them in its agent and event tables under one "external run" per job, and pushes them to the live stream. Its own agents are already recorded, so nothing is doubled. AI summaries stay off for these events (no extra cost).
-
-Then any run, started from the chat, the UI or a comment, shows on the board in both UIs and with its agents live in the tac UI.
-
-**Effort:** B1 and B2 are small. B3 and B4 are about a session each in tac-combined's FastAPI and Vue code.
-
-## Verification
-
-- **Part A:** one `/orch_factory` run on a tiny issue from the tac UI, ending at `needs-human` with a PR. The job appears on the factory dashboard with its cost, and every agent appears in the UI.
-- **Part B:** one run per driver appears on both boards; the agents of a `/factory run` and an ADW run stream live in the tac UI.
+- **API, against the two real runs:**
+  - factory job 001: 7 agents, 21 orchestrator events;
+  - ADW run `ec19ba08`: 7 agents with model and cost, 23 orchestrator events;
+  - each agent's event stream.
+- **Protections:**
+  - `/.env` → 404;
+  - path traversal → 403;
+  - a foreign `Host` → 403;
+  - a POST without the header → 403;
+  - an empty prompt → a clear error.
+- **In a real browser (agent-browser), screenshots of:**
+  - the Board with both runs;
+  - the Agents tab of the ADW run (orchestrator log, 7 agents);
+  - the factory builder's live events: a failing test, the fix, the passing run, the commit, the push.
+- **A bug the browser check caught:** the feedback box showed on a merged run; fixed.
+- **Script:** `node --check` passes on the page's script.

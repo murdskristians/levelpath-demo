@@ -230,6 +230,67 @@
     display: flex; gap: 20px; flex-wrap: wrap;
   }
 
+  /* Control room: only when served by factory/bin/serve */
+  .cr-only { display: none !important; }
+  body.cr .cr-only { display: revert !important; }
+  .start { display: flex; gap: 10px; align-items: flex-start; padding: 8px 32px 0; flex-wrap: wrap; }
+  body.cr .start.cr-only { display: flex !important; }
+  .start textarea {
+    flex: 1 1 420px; min-height: 44px; resize: vertical; background: var(--card); color: var(--text);
+    border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; font: inherit;
+  }
+  .start textarea:focus, .fb textarea:focus { outline: 2px solid var(--active); outline-offset: 1px; }
+  .btn {
+    background: color-mix(in srgb, var(--active) 18%, transparent); color: var(--active);
+    border: 1px solid color-mix(in srgb, var(--active) 45%, transparent); border-radius: 8px;
+    padding: 10px 14px; cursor: pointer; font-weight: 600; white-space: nowrap;
+  }
+  .btn:hover { background: color-mix(in srgb, var(--active) 28%, transparent); }
+  .btn:disabled { opacity: .5; cursor: progress; }
+  .start-msg { flex-basis: 100%; font-family: var(--mono); font-size: 12px; color: var(--muted); min-height: 1em; }
+  .start-msg.err { color: var(--human); }
+  .drv {
+    font-family: var(--mono); font-size: 9.5px; padding: 1px 6px; border-radius: 4px;
+    border: 1px solid var(--line); color: var(--muted); white-space: nowrap;
+  }
+  .drv.adw { color: var(--merged); border-color: color-mix(in srgb, var(--merged) 45%, transparent); }
+  .tabs { display: flex; gap: 6px; margin-top: 10px; }
+  body.cr .tabs.cr-only { display: flex !important; }
+  .tab {
+    background: none; border: 1px solid var(--line); border-radius: 6px; padding: 4px 12px;
+    cursor: pointer; font-size: 12px; color: var(--muted);
+  }
+  .tab.on { color: var(--text); border-color: var(--muted); background: var(--card); }
+  .a-body { display: grid; grid-template-columns: 230px 1fr; min-height: 0; }
+  .a-body[hidden], .d-body[hidden] { display: none; }
+  .agents { border-right: 1px solid var(--line); padding: 14px 10px; overflow-y: auto; }
+  .agent {
+    display: grid; grid-template-columns: 10px 1fr; column-gap: 8px; width: 100%; text-align: left;
+    background: none; border: 0; border-radius: 6px; padding: 6px 8px; cursor: pointer; color: var(--muted);
+  }
+  .agent:hover { background: var(--card); color: var(--text); }
+  .agent.on { background: var(--card-hover); color: var(--text); }
+  .agent .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--pass); margin-top: 6px; }
+  .agent.running .dot { background: var(--active); animation: pulse 1.6s ease-in-out infinite; }
+  .agent .role { font-weight: 600; font-size: 12.5px; }
+  .agent .sub { grid-column: 2; font-family: var(--mono); font-size: 10.5px; color: var(--faint); }
+  .events { overflow-y: auto; padding: 14px 18px 60px; font-family: var(--mono); font-size: 12px; min-width: 0; }
+  .ev { display: grid; grid-template-columns: 74px 1fr; gap: 10px; padding: 3px 0; border-bottom: 1px solid color-mix(in srgb, var(--line) 50%, transparent); }
+  .ev .k { color: var(--faint); text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ev .tx { white-space: pre-wrap; overflow-wrap: anywhere; color: var(--muted); }
+  .ev.text .tx, .ev.prompt .tx { color: var(--text); }
+  .ev.tool .k { color: var(--active); }
+  .ev.error .k, .ev.error .tx { color: var(--human); }
+  .ev.done .k { color: var(--pass); }
+  .fb { padding: 12px 18px; border-top: 1px solid var(--line); display: flex; gap: 10px; flex-wrap: wrap; }
+  .fb textarea {
+    flex: 1 1 300px; min-height: 40px; background: var(--card); color: var(--text);
+    border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font: inherit;
+  }
+  .fb[hidden] { display: none; }
+  .ev-wrap { display: grid; grid-template-rows: 1fr auto; min-height: 0; }
+  .shot { max-width: 100%; border: 1px solid var(--line); border-radius: 8px; }
+
   @media (max-width: 1100px) {
     .board { grid-template-columns: repeat(4, minmax(0, 1fr)); row-gap: 28px; }
     .col-head::after { display: none; }
@@ -254,15 +315,21 @@
 </head>
 <body>
 <header>
-  <h1>Software factory</h1>
+  <h1>Control room <span class="drv">levelpath-demo</span></h1>
   <div class="status" id="status">connecting…</div>
 </header>
+<form class="start cr-only" id="start">
+  <textarea id="prompt" rows="2" aria-label="Feature to build"
+    placeholder="Describe a feature. It becomes a GitHub issue, and a headless ADW run starts on it. You merge the PR."></textarea>
+  <button class="btn" type="submit" id="start-btn">Start run</button>
+  <div class="start-msg" id="start-msg"></div>
+</form>
 <div id="banner"></div>
 <main class="board" id="board"></main>
 <footer>
-  <span>/factory run</span>
-  <span>/factory run &lt;n&gt;</span>
-  <span>/factory &lt;anything&gt;</span>
+  <span>chat: /factory run &lt;n&gt;</span>
+  <span>here: the prompt box (ADW)</span>
+  <span>GitHub: comment adw</span>
   <span id="totals"></span>
 </footer>
 
@@ -273,11 +340,26 @@
       <div class="num" id="d-num"></div>
       <h3 id="d-title"></h3>
       <div class="links" id="d-links"></div>
+      <div class="tabs cr-only" role="tablist">
+        <button class="tab on" data-tab="files" role="tab">Files</button>
+        <button class="tab" data-tab="agents" role="tab">Agents</button>
+      </div>
       <button class="close" data-close aria-label="Close">×</button>
     </div>
-    <div class="d-body">
+    <div class="d-body" id="d-body">
       <nav class="files" id="d-files"></nav>
       <article class="doc"><div class="md" id="d-doc"></div></article>
+    </div>
+    <div class="a-body" id="a-body" hidden>
+      <nav class="agents" id="a-list"></nav>
+      <div class="ev-wrap">
+        <div class="events" id="a-events"></div>
+        <form class="fb" id="feedback" hidden>
+          <textarea id="fb-text" aria-label="Feedback for the builder"
+            placeholder="This run waits for you. Ask for a change and it builds another round (adw patch)."></textarea>
+          <button class="btn" type="submit">Send feedback</button>
+        </form>
+      </div>
     </div>
   </aside>
 </div>
@@ -394,13 +476,14 @@ function card(job, rounds) {
       <div class="card-top">
         ${live ? '<span class="pulse" aria-label="running"></span>' : ''}
         <span class="num">${esc(num)} · ${esc(slug.join('-'))}</span>
+        <span class="drv ${job.driver === 'adw' ? 'adw' : ''}">${job.driver === 'adw' ? 'ADW' : 'chat'}</span>
         ${flag}
       </div>
       <p class="feature">${esc(job.title)}</p>
       <div class="links">${links(job)}</div>
       ${rounds.length ? `<div class="rounds">${rounds.join('')}</div>` : ''}
       <div class="meta">${meta}</div>
-      ${human ? `<div class="hint">${job.pr ? `review PR #${job.pr}; you merge it<br>` : ''}or give feedback: /factory &lt;anything&gt;</div>` : ''}
+      ${human ? `<div class="hint">${job.pr ? `review PR #${job.pr}; you merge it<br>` : ''}or give feedback: ${job.driver === 'adw' ? 'Agents tab, or comment adw patch' : '/factory &lt;anything&gt;'}</div>` : ''}
     </article>`
 }
 
@@ -438,6 +521,7 @@ async function poll() {
   try {
     jobs = await loadJobs()
     await render()
+    if (pendingOpen && jobs.some((j) => j.id === pendingOpen)) { openDrawer(pendingOpen, 'agents'); pendingOpen = null }
     if (openJobId) await refreshDrawer()
     status.className = 'status'
     status.innerHTML = `<span class="dot"></span>jobs/ · ${new Date().toLocaleTimeString()}`
@@ -469,7 +553,7 @@ async function listFiles(dir) {
   const out = []
   for (const h of hrefs) {
     if (h.endsWith('/')) out.push(...(await listFiles(dir + h)).map((f) => h + f))
-    else if (h.endsWith('.md')) out.push(h)
+    else if (h.endsWith('.md') || h.endsWith('.png')) out.push(h)
   }
   return out
 }
@@ -479,6 +563,8 @@ const ROUND_ORDER = ['checks', 'review-verify', 'review-bugs', 'review-spec', 'r
 
 function fileRank(path) {
   if (ORDER.includes(path)) return [0, ORDER.indexOf(path), path]
+  const shot = path.match(/^round-(\d+)\/shots\//)
+  if (shot) return [2, Number(shot[1]) * 10 + 9, path]
   const round = path.match(/^round-(\d+)\/(.+)\.md$/)
   if (round) return [2, Number(round[1]) * 10 + ROUND_ORDER.indexOf(round[2]), path]
   return [1, 0, path] // intake-<k>.md, feedback-<k>.md
@@ -503,6 +589,7 @@ const firstLines = new Map()
 async function refreshDrawer() {
   const job = jobs.find((j) => j.id === openJobId)
   if (!job) return
+  if (drawerTab === 'agents') return refreshAgents(job)
   $('d-num').textContent = `${job.id} · ${job.stage}${job.round ? ` · round ${job.round}` : ''} · $${Number(job.cost_usd).toFixed(2)} · ${elapsed(job)}`
   $('d-title').textContent = job.title
   $('d-links').innerHTML = links(job)
@@ -512,11 +599,14 @@ async function refreshDrawer() {
   if (!openPath || !files.includes(openPath)) openPath = files[0] || null
 
   let text = null
-  if (openPath) {
+  let image = null
+  if (openPath && openPath.endsWith('.png')) {
+    image = base + openPath
+  } else if (openPath) {
     text = await fetchText(base + openPath)
     firstLines.set(base + openPath, text.split('\n')[0].trim())
   }
-  await Promise.all(files.filter((f) => !firstLines.has(base + f)).map(async (f) => {
+  await Promise.all(files.filter((f) => f.endsWith('.md') && !firstLines.has(base + f)).map(async (f) => {
     firstLines.set(base + f, (await fetchText(base + f)).split('\n')[0].trim())
   }))
 
@@ -534,16 +624,19 @@ async function refreshDrawer() {
       <span class="v ${t || ''}"></span>${name}</button>`
   }).join('') || '<div class="empty">No files yet.</div>'
 
-  if (text !== openText) {
-    openText = text
-    $('d-doc').innerHTML = text === null ? '<p class="note">Intake hasn’t written anything yet.</p>' : markdown(text)
+  const shown = image ? `image:${image}` : text
+  if (shown !== openText) {
+    openText = shown
+    $('d-doc').innerHTML = image ? `<img class="shot" alt="${esc(openPath)}" src="${esc(image)}">`
+      : text === null ? '<p class="note">Intake hasn’t written anything yet.</p>' : markdown(text)
   }
 }
 
-async function openDrawer(id) {
+async function openDrawer(id, tab = 'files') {
   openJobId = id
   openPath = null
   openText = undefined
+  setTab(controlRoom ? tab : 'files')
   document.body.classList.add('open')
   try {
     await refreshDrawer()
@@ -561,6 +654,10 @@ document.addEventListener('click', (e) => {
   if (e.target.closest('a')) return
   const cardEl = e.target.closest('[data-job]')
   if (cardEl) return openDrawer(cardEl.dataset.job)
+  const tabEl = e.target.closest('[data-tab]')
+  if (tabEl) { setTab(tabEl.dataset.tab); return refreshDrawer() }
+  const agentEl = e.target.closest('[data-agent]')
+  if (agentEl) { agentsState.selected = agentEl.dataset.agent; return refreshDrawer() }
   const fileEl = e.target.closest('[data-file]')
   if (fileEl) {
     openPath = fileEl.dataset.file
@@ -574,6 +671,111 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') return closeDrawer()
   const cardEl = e.target.closest?.('[data-job]')
   if (cardEl && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); openDrawer(cardEl.dataset.job) }
+})
+
+// ---- Control room (factory/bin/serve): start runs, watch agents live ---------
+
+let controlRoom = false
+let drawerTab = 'files'
+let pendingOpen = null
+const agentsState = { key: null, selected: 'orchestrator', count: 0 }
+
+async function detectControlRoom() {
+  try {
+    const res = await fetch('api/ping', { cache: 'no-store' })
+    controlRoom = res.ok && (await res.json()).ok === true
+  } catch { controlRoom = false }
+  document.body.classList.toggle('cr', controlRoom)
+}
+
+async function post(url, body) {
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Control-Room': '1' },
+    body: JSON.stringify(body),
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`)
+  return data
+}
+
+function setTab(tab) {
+  drawerTab = tab
+  for (const b of document.querySelectorAll('[data-tab]')) b.classList.toggle('on', b.dataset.tab === tab)
+  $('d-body').hidden = tab !== 'files'
+  $('a-body').hidden = tab !== 'agents'
+}
+
+function eventRow(e) {
+  const label = { text: 'says', prompt: 'prompt', result: '→', error: 'error', done: 'done' }[e.kind] || e.name || e.kind
+  return `<div class="ev ${esc(e.kind)}"><span class="k" title="${esc(label)}">${esc(label)}</span><span class="tx">${esc(e.text)}</span></div>`
+}
+
+// The run's agents, newest last, with the orchestrator first; the selected one's events stream in.
+async function refreshAgents(job) {
+  $('d-num').textContent = `${job.id} · ${job.stage}${job.round ? ` · round ${job.round}` : ''} · $${Number(job.cost_usd).toFixed(2)} · ${elapsed(job)}`
+  $('d-title').textContent = job.title
+  $('d-links').innerHTML = links(job)
+  const data = await (await fetch(`api/agents?run=${encodeURIComponent(job.id)}`, { cache: 'no-store' })).json()
+  const items = [
+    { key: 'orchestrator', role: 'orchestrator', running: LIVE.has(job.stage),
+      sub: `${job.driver === 'adw' ? 'ADW pipeline' : 'your /factory session'} · ${data.orchestrator} ev` },
+    ...data.agents.map((a) => ({ ...a, sub: [String(a.model || '').replace(/^claude-/, ''), `${a.events} ev`,
+      a.cost ? `$${Number(a.cost).toFixed(2)}` : ''].filter(Boolean).join(' · ') })),
+  ]
+  if (!items.some((i) => i.key === agentsState.selected)) agentsState.selected = 'orchestrator'
+  $('a-list').innerHTML = items.map((a) => `
+    <button class="agent ${a.running ? 'running' : ''} ${a.key === agentsState.selected ? 'on' : ''}" data-agent="${esc(a.key)}">
+      <span class="dot"></span><span class="role">${esc(a.role)}</span><span class="sub">${esc(a.sub)}</span>
+    </button>`).join('')
+
+  const key = `${job.id}|${agentsState.selected}`
+  const box = $('a-events')
+  if (agentsState.key !== key) { agentsState.key = key; agentsState.count = 0; box.innerHTML = '' }
+  const url = `api/events?run=${encodeURIComponent(job.id)}&agent=${encodeURIComponent(agentsState.selected)}&after=${agentsState.count}`
+  const fresh = (await (await fetch(url, { cache: 'no-store' })).json()).events
+  if (fresh.length) {
+    if (!agentsState.count) box.innerHTML = ''
+    const atEnd = box.scrollHeight - box.scrollTop - box.clientHeight < 60
+    box.insertAdjacentHTML('beforeend', fresh.map(eventRow).join(''))
+    agentsState.count += fresh.length
+    if (atEnd) box.scrollTop = box.scrollHeight
+  } else if (!agentsState.count) {
+    box.innerHTML = '<p class="note">Nothing yet. Events appear here while the agent works.</p>'
+  }
+  $('feedback').hidden = !(job.driver === 'adw' && job.stage === 'needs-human')
+}
+
+$('start').addEventListener('submit', async (e) => {
+  e.preventDefault()
+  const msg = $('start-msg')
+  const prompt = $('prompt').value.trim()
+  if (!prompt) { msg.className = 'start-msg err'; msg.textContent = 'Write what you want built.'; return }
+  $('start-btn').disabled = true
+  msg.className = 'start-msg'
+  msg.textContent = 'Filing the issue and starting the run…'
+  try {
+    const r = await post('api/runs', { prompt })
+    msg.innerHTML = `Started <b>${esc(r.run)}</b> on <a href="${esc(r.issue_url)}" target="_blank" rel="noopener">issue #${esc(r.issue)}</a>. Its card opens in a few seconds.`
+    $('prompt').value = ''
+    pendingOpen = r.run
+  } catch (err) {
+    msg.className = 'start-msg err'
+    msg.textContent = err.message
+  } finally {
+    $('start-btn').disabled = false
+  }
+})
+
+$('feedback').addEventListener('submit', async (e) => {
+  e.preventDefault()
+  const text = $('fb-text').value.trim()
+  if (!text || !openJobId) return
+  try {
+    await post(`api/runs/${encodeURIComponent(openJobId)}/feedback`, { text })
+    $('fb-text').value = ''
+    $('feedback').hidden = true
+  } catch (err) { alert(err.message) }
 })
 
 // ---- Markdown (just enough for the factory's files) ---------------------
@@ -674,7 +876,7 @@ function markdown(src) {
   return html
 }
 
-poll()
+detectControlRoom().then(poll)
 setInterval(poll, POLL_MS)
 </script>
 </body>

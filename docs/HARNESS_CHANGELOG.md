@@ -275,3 +275,38 @@ Format:
   - **Cleanup:** both drivers then run `git worktree prune`. The new `adws/adw_cleanup_iso.py <issue> <adw_id>` closes out an ADW run after the merge: worktree, local branch and label, and the run is recorded as `merged`. Tested on run `ec19ba08`.
   - **Git:** this clone also has `core.longpaths=true`.
 - **Why this prevents a repeat:** The cleanup no longer depends on git handling long paths, and each driver has a defined last step after a person merges.
+
+## 2026-11-17: The control room: every run, live, in one local page
+
+- **What was missing:**
+  - Chris wanted tac-combined's live view (start from a prompt, watch the orchestrator and every agent) and the factory's board, over every run whichever driver started it.
+  - levelpath-demo must stand alone.
+  - tac-combined is private course code (about 25,000 lines), and this repo is public, so it couldn't simply be copied in. Chris chose our own UI.
+- **Before:**
+  - The dashboard showed only `/factory run` jobs.
+  - Its documented `python3 -m http.server` would serve the whole repo, `.env` included, if run from the root, and listen on every network interface.
+  - Agent activity was only in transcripts.
+- **After:** `factory/bin/serve` (stdlib) and the extended `factory/dashboard.html`:
+  - **Board:** factory jobs and ADW runs side by side. ADW state is shaped like a factory job, with a driver badge.
+  - **Agents tab:** each agent's text, tool calls and results, live.
+    - Factory subagents are found by the job header in Claude Code's transcripts, with the role, model and finished flag from their `.meta.json`.
+    - ADW agents come from their stream logs.
+    - The orchestrator's decisions come first.
+  - **Prompt box:** files the issue and starts a detached ADW run.
+  - **Feedback box:** for a waiting ADW run.
+  - **Files tab:** now shows the verifier's screenshots.
+  - **Safety:** localhost only, `Host` checked, only run folders served, and POSTs need a custom header.
+
+  Verified against both real runs, with browser screenshots. The browser check caught one bug: the feedback box showed on merged runs.
+
+- **Why:** Seeing what the agents actually do is how you learn to trust a factory, and how you show it in an interview. It reads the files every driver already writes, so the drivers didn't change.
+
+## 2026-11-17: levelpath-demo stands on its own
+
+- **What went wrong:** The orchestrator-UI driver lived in tac-combined, a separate, private project with its own settings. Chris wants this repo to need nothing from another project. A check of visibility also showed that `CREDITS.md` linked private repositories (git-adw, tac-combined, multi-agent-orchestration), so the public saw dead links.
+- **Before:** `.claude/commands/orch_factory.md` lived in this repo, and three credits were links.
+- **After:**
+  - `/orch_factory` moved into tac-combined's own toolkit (tac-combined offers its toolkit to any repo it points at), so tac-combined can still drive this factory privately.
+  - The control room replaces it here.
+  - The credits name the private sources without linking them.
+- **Why:** A public demo repo must run from a clone, with nothing hidden behind private links.

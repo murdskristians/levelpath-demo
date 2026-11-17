@@ -1,0 +1,432 @@
+#!/usr/bin/env -S python3 -X utf8
+"""The control room: one local page for every run, whichever driver started it.
+
+Usage:
+  factory/bin/serve [--port 8000]      then open http://127.0.0.1:8000
+
+Two views over the files every driver already writes:
+  Board   every job's stage, rounds, verdicts, PR and cost: factory jobs
+          (factory/jobs/<id>/) and ADW runs (agents/<adw_id>/), side by side
+  Agents  each agent of a run, live: what it says, every tool call and result,
+          read from its transcript (factory: ~/.claude/projects/<repo>/<session>/
+          subagents/, ADW: agents/<id>/logs/), plus the orchestrator's decisions
+
+And one action: a prompt box that files a GitHub issue and starts a headless ADW
+run on it (`uv run adws/adw_sdlc_iso.py <issue> <adw_id>`), plus feedback for a
+waiting ADW run (`adw_patch_iso.py`). Nothing here merges anything.
+
+Only 127.0.0.1 can reach it, it serves only the run folders (never the repo, so
+never .env), and every POST needs the X-Control-Room header, which a page from
+another site can't send. Stdlib only.
+"""
+
+import argparse
+import html
+import importlib.machinery
+import importlib.util
+import json
+import os
+import re
+import subprocess
+import sys
+import threading
+import time
+import uuid
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
+from urllib.parse import parse_qs, unquote, urlparse
+
+FACTORY = Path(__file__).resolve().parents[1]
+REPO = FACTORY.parent
+JOBS = FACTORY / "jobs"
+RUNS = REPO / "agents"  # ADW runs (and L1 job folders without a state file, which are skipped)
+WINDOWS = os.name == "nt"
+ADW_STAGES = {"new": "intake", "closed": "rejected"}  # ADW stage -> board column stage
+
+# Reuse the factory's transcript reading and prices (factory/bin/job is the one source).
+_loader = importlib.machinery.SourceFileLoader("factory_job", str(FACTORY / "bin" / "job"))
+_spec = importlib.util.spec_from_loader("factory_job", _loader)
+JOB = importlib.util.module_from_spec(_spec)
+_loader.exec_module(JOB)
+CONFIG = JOB.CONFIG
+
+
+def repo_url():
+    res = subprocess.run(["git", "remote", "get-url", "origin"], cwd=REPO, capture_output=True, text=True)
+    url = res.stdout.strip().removesuffix(".git")
+    if url.startswith("git@github.com:"):
+        url = "https://github.com/" + url.split(":", 1)[1]
+    return url
+
+
+REPO_URL = repo_url()
+
+
+# ---- runs: factory jobs and ADW runs as one list ------------------------------------
+
+
+def adw_job(adw_id):
+    """An ADW run's state, in the shape of a factory job.json, so the board renders both."""
+    folder = RUNS / adw_id
+    state = json.loads((folder / "adw_state.json").read_text(encoding="utf-8"))
+    stage = ADW_STAGES.get(state.get("stage"), state.get("stage"))
+    started = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(min(
+        (p.stat().st_mtime for p in folder.iterdir()), default=time.time())))
+    waiting = stage in {"needs-human", "needs-info", "merged", "rejected"}
+    ended = (time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime((folder / "adw_state.json").stat().st_mtime))
+             if waiting else None)
+    issue, pr = state.get("issue_number"), state.get("pr_number")
+    return {
+        "id": f"adw-{adw_id}",
+        "driver": "adw",
+        "issue": int(issue) if issue else None,
+        "title": state.get("title") or f"ADW run {adw_id}",
+        "issue_url": f"{REPO_URL}/issues/{issue}" if issue else None,
+        "pr": pr,
+        "pr_url": f"{REPO_URL}/pull/{pr}" if pr else None,
+        "branch": state.get("branch_name"),
+        "worktree": state.get("worktree_path"),
+        "stage": stage,
+        "round": state.get("round", 0),
+        "round_limit": state.get("round_limit", 3),
+        "agents": state.get("agents") or {"reviewers": {}},
+        "intake": {"risk": state.get("risk"), "surfaces": state.get("surfaces", [])},
+        "cost_usd": round(sum((state.get("costs") or {}).values()), 2),
+        "started": started,
+        "ended": ended,
+    }
+
+
+def run_ids():
+    ids = []
+    if JOBS.is_dir():
+        ids += sorted(p.name for p in JOBS.iterdir() if (p / "job.json").is_file())
+    if RUNS.is_dir():
+        ids += sorted(f"adw-{p.name}" for p in RUNS.iterdir() if (p / "adw_state.json").is_file())
+    return ids
+
+
+def run_folder(run_id):
+    if run_id.startswith("adw-"):
+        return RUNS / run_id[4:]
+    return JOBS / run_id
+
+
+def load_job(run_id):
+    if run_id.startswith("adw-"):
+        return adw_job(run_id[4:])
+    job = json.loads((JOBS / run_id / "job.json").read_text(encoding="utf-8"))
+    job["driver"] = "factory"
+    return job
+
+
+# ---- agents and their events ------------------------------------------------------
+
+_cache = {}  # path -> (mtime, size, value)
+_lock = threading.Lock()
+
+
+def cached(path, parse):
+    """parse(path), recomputed only when the file changed. Keyed by file and parser."""
+    st = path.stat()
+    key = (path, parse.__name__)
+    with _lock:
+        hit = _cache.get(key)
+        if hit and hit[0] == st.st_mtime and hit[1] == st.st_size:
+            return hit[2]
+    value = parse(path)
+    with _lock:
+        _cache[key] = (st.st_mtime, st.st_size, value)
+    return value
+
+
+def short(value, limit=240):
+    text = " ".join(str(value).split())
+    return text if len(text) <= limit else text[: limit - 1] + "…"
+
+
+def tool_detail(name, inp):
+    for key in ("command", "file_path", "pattern", "path", "url", "description", "prompt"):
+        if isinstance(inp, dict) and inp.get(key):
+            return short(inp[key], 300)
+    return short(json.dumps(inp)[:300])
+
+
+def parse_events(path):
+    """A transcript or stream-json log as a list of events the page can show."""
+    events, model, cost, done = [], None, None, False
+    with open(path, encoding="utf-8", errors="replace") as f:
+        for line in f:
+            try:
+                e = json.loads(line)
+            except ValueError:
+                continue
+            kind, msg = e.get("type"), e.get("message")
+            if not isinstance(msg, dict):
+                msg = {}
+            ts = e.get("timestamp")
+            if kind == "system" and e.get("subtype") == "init":
+                model = e.get("model") or model
+            elif kind == "assistant" and isinstance(msg, dict):
+                model = msg.get("model") or model
+                for b in msg.get("content") or []:
+                    if b.get("type") == "text" and b.get("text", "").strip():
+                        events.append({"t": ts, "kind": "text", "text": short(b["text"], 1200)})
+                    elif b.get("type") == "tool_use":
+                        events.append({"t": ts, "kind": "tool", "name": b.get("name"),
+                                       "text": tool_detail(b.get("name"), b.get("input"))})
+            elif kind == "user" and isinstance(msg, dict) and isinstance(msg.get("content"), list):
+                for b in msg["content"]:
+                    if isinstance(b, dict) and b.get("type") == "tool_result":
+                        c = b.get("content")
+                        text = c if isinstance(c, str) else " ".join(
+                            x.get("text", "") for x in (c or []) if isinstance(x, dict))
+                        events.append({"t": ts, "kind": "error" if b.get("is_error") else "result",
+                                       "text": short(text, 400)})
+            elif kind == "user" and isinstance(msg.get("content"), str) and not events:
+                events.append({"t": ts, "kind": "prompt", "text": short(msg["content"], 1200)})
+            elif kind == "result":
+                done = True
+                cost = e.get("total_cost_usd")
+                events.append({"t": ts, "kind": "done",
+                               "text": short(f"{e.get('subtype')}: {e.get('result') or ''}", 600)})
+    return {"events": events, "model": model, "cost": cost, "done": done}
+
+
+def factory_agents(run_id):
+    """Subagents of `/factory run` sessions whose first prompt names this job's folder."""
+    needle = JOB.norm_path(f"Job folder: {(JOBS / run_id).as_posix()}/")
+    agents, sessions = [], set()
+    for path in sorted(JOB.transcripts_dir().glob("*/subagents/agent-*.jsonl"), key=lambda p: p.stat().st_mtime):
+        first = cached(path, first_prompt_of)
+        if needle not in JOB.norm_path(first):
+            continue
+        meta_file = path.with_name(path.name.replace(".jsonl", ".meta.json"))
+        meta = json.loads(meta_file.read_text(encoding="utf-8")) if meta_file.exists() else {}
+        parsed = cached(path, parse_events)
+        agents.append({
+            "key": path.stem, "role": meta.get("agentType") or "agent", "label": meta.get("description") or path.stem,
+            "model": meta.get("model") or parsed["model"], "running": not meta.get("finished", parsed["done"]),
+            "events": len(parsed["events"]), "updated": path.stat().st_mtime, "path": str(path),
+        })
+        sessions.add(path.parent.parent)
+    return agents, sessions
+
+
+def first_prompt_of(path):
+    with open(path, encoding="utf-8", errors="replace") as f:
+        return JOB.first_prompt(f)
+
+
+def adw_agents(run_id):
+    logs = RUNS / run_id[4:] / "logs"
+    agents = []
+    for path in sorted(logs.glob("*.jsonl"), key=lambda p: p.stat().st_mtime) if logs.is_dir() else []:
+        parsed = cached(path, parse_events)
+        tag = path.stem
+        role = re.sub(r"-r\d+(-retry)?$", "", tag)
+        role = {"review-verify": "verifier"}.get(role, role.replace("review-", "reviewer-"))
+        agents.append({
+            "key": tag, "role": role, "label": tag, "model": parsed["model"], "running": not parsed["done"],
+            "events": len(parsed["events"]), "cost": parsed["cost"], "updated": path.stat().st_mtime,
+            "path": str(path),
+        })
+    return agents
+
+
+def orchestrator_events(run_id, sessions=()):
+    """What the orchestrator decided: the ADW pipeline's log, or the factory session's own words."""
+    events = []
+    if run_id.startswith("adw-"):
+        folder = RUNS / run_id[4:]
+        for log in sorted(folder.glob("adw_*/execution.log"), key=lambda p: p.stat().st_mtime):
+            for line in log.read_text(encoding="utf-8", errors="replace").splitlines():
+                m = re.match(r"^(\S+ \S+) - (\w+) - (.*)$", line)
+                if m and m.group(2) in ("INFO", "WARNING", "ERROR"):
+                    events.append({"t": m.group(1), "kind": "error" if m.group(2) == "ERROR" else "text",
+                                   "text": short(m.group(3), 600)})
+        return events
+    for session in sessions:  # <projects>/<repo>/<session>/ holds the subagents; its transcript sits beside it
+        main = session.parent / f"{session.name}.jsonl"
+        if not main.exists():
+            continue
+        for e in cached(main, parse_events)["events"]:
+            if e["kind"] in ("text", "tool") and run_id in e["text"]:
+                events.append(e)
+    return events
+
+
+def agents_of(run_id):
+    if run_id.startswith("adw-"):
+        agents = adw_agents(run_id)
+        orch = orchestrator_events(run_id)
+    else:
+        agents, sessions = factory_agents(run_id)
+        orch = orchestrator_events(run_id, sessions)
+    for a in agents:
+        a.pop("path", None)
+    return {"run": run_id, "orchestrator": len(orch), "agents": agents}
+
+
+def events_of(run_id, key, after):
+    if key == "orchestrator":
+        if run_id.startswith("adw-"):
+            events = orchestrator_events(run_id)
+        else:
+            events = orchestrator_events(run_id, factory_agents(run_id)[1])
+        return events[after:]
+    if run_id.startswith("adw-"):
+        path = RUNS / run_id[4:] / "logs" / f"{key}.jsonl"
+    else:
+        path = next((p for p in JOB.transcripts_dir().glob(f"*/subagents/{key}.jsonl")), None)
+    if not path or not path.exists():
+        return []
+    return cached(path, parse_events)["events"][after:]
+
+
+# ---- actions -----------------------------------------------------------------------
+
+
+def start_run(prompt):
+    """File the prompt as an issue and start a headless ADW run on it."""
+    lines = [l for l in prompt.strip().splitlines() if l.strip()]
+    if not lines:
+        raise ValueError("Write what you want built.")
+    title = short(lines[0], 80)
+    res = subprocess.run(["gh", "issue", "create", "--title", title, "--body", prompt.strip()],
+                         cwd=REPO, capture_output=True, text=True, encoding="utf-8")
+    if res.returncode != 0:
+        raise RuntimeError(f"gh issue create failed: {res.stderr.strip()}")
+    number = res.stdout.strip().rstrip("/").rsplit("/", 1)[-1]
+    adw_id = uuid.uuid4().hex[:8]
+    spawn(["adw_sdlc_iso.py", number, adw_id], adw_id)
+    return {"run": f"adw-{adw_id}", "issue": int(number), "issue_url": res.stdout.strip()}
+
+
+def give_feedback(run_id, text):
+    if not run_id.startswith("adw-"):
+        raise ValueError("Factory jobs take feedback in your Claude session: /factory <what to change>.")
+    state = json.loads((RUNS / run_id[4:] / "adw_state.json").read_text(encoding="utf-8"))
+    if state.get("stage") != "needs-human":
+        raise ValueError(f"The run is at {state.get('stage')}, not waiting for you.")
+    spawn(["adw_patch_iso.py", str(state["issue_number"]), run_id[4:], text.strip()], run_id[4:])
+    return {"run": run_id}
+
+
+def spawn(args, adw_id):
+    """Start an ADW script detached from this server: stopping the server never stops a run."""
+    (RUNS / adw_id).mkdir(parents=True, exist_ok=True)
+    out = open(RUNS / adw_id / "control-room.log", "a", encoding="utf-8")
+    env = dict(os.environ, UV_NATIVE_TLS="1", PYTHONUNBUFFERED="1")
+    # New process group: Ctrl+C in this server's terminal doesn't reach the run. No window either.
+    flags = (subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.CREATE_NO_WINDOW) if WINDOWS else 0
+    subprocess.Popen(["uv", "run", str(REPO / "adws" / args[0]), *args[1:]], cwd=REPO, stdout=out,
+                     stderr=subprocess.STDOUT, env=env, creationflags=flags, start_new_session=not WINDOWS)
+
+
+# ---- HTTP ----------------------------------------------------------------------------
+
+
+class Handler(BaseHTTPRequestHandler):
+    server_version = "control-room"
+
+    def log_message(self, fmt, *args):  # quiet: one line per action, not per poll
+        pass
+
+    def send(self, code, body, ctype="application/json; charset=utf-8"):
+        data = body if isinstance(body, bytes) else (json.dumps(body) if ctype.startswith("application/json")
+                                                       else body).encode("utf-8")
+        self.send_response(code)
+        self.send_header("Content-Type", ctype)
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
+
+    def local_host(self):
+        host = (self.headers.get("Host") or "").split(":")[0]
+        return host in {"127.0.0.1", "localhost"}  # refuses DNS-rebinding hosts
+
+    def do_GET(self):
+        if not self.local_host():
+            return self.send(403, {"error": "local only"})
+        url = urlparse(self.path)
+        path, q = unquote(url.path), parse_qs(url.query)
+        try:
+            if path in ("/", "/dashboard.html"):
+                return self.send(200, (FACTORY / "dashboard.html").read_bytes(), "text/html; charset=utf-8")
+            if path == "/api/ping":
+                return self.send(200, {"ok": True, "repo": REPO_URL})
+            if path == "/api/agents":
+                return self.send(200, agents_of(q["run"][0]))
+            if path == "/api/events":
+                after = int(q.get("after", ["0"])[0])
+                return self.send(200, {"events": events_of(q["run"][0], q["agent"][0], after)})
+            if path == "/jobs/":
+                links = "".join(f'<li><a href="{html.escape(i)}/">{html.escape(i)}/</a></li>' for i in run_ids())
+                return self.send(200, f"<ul>{links}</ul>", "text/html; charset=utf-8")
+            m = re.match(r"^/jobs/([^/]+)/(.*)$", path)
+            if m:
+                return self.serve_run_file(m.group(1), m.group(2))
+            return self.send(404, {"error": "not found"})
+        except (KeyError, FileNotFoundError, ValueError) as e:
+            return self.send(404, {"error": str(e)})
+
+    def serve_run_file(self, run_id, rel):
+        if run_id not in run_ids():
+            return self.send(404, {"error": "no such run"})
+        if rel == "job.json":
+            return self.send(200, load_job(run_id))
+        root = run_folder(run_id).resolve()
+        target = (root / rel).resolve()
+        if root != target and root not in target.parents:
+            return self.send(403, {"error": "outside the run"})
+        if target.is_dir():
+            names = []
+            for p in sorted(target.iterdir()):
+                if p.name in {"logs", "adw_state.json"} or p.name.startswith("adw_"):
+                    continue  # the Agents view shows those
+                names.append(p.name + ("/" if p.is_dir() else ""))
+            links = "".join(f'<li><a href="{html.escape(n)}">{html.escape(n)}</a></li>' for n in names)
+            return self.send(200, f"<ul>{links}</ul>", "text/html; charset=utf-8")
+        types = {".md": "text/plain; charset=utf-8", ".log": "text/plain; charset=utf-8", ".png": "image/png",
+                 ".json": "application/json; charset=utf-8"}
+        if target.suffix not in types:
+            return self.send(404, {"error": "not served"})
+        return self.send(200, target.read_bytes(), types[target.suffix])
+
+    def do_POST(self):
+        if not self.local_host() or self.headers.get("X-Control-Room") != "1":
+            return self.send(403, {"error": "forbidden"})
+        try:
+            length = min(int(self.headers.get("Content-Length") or 0), 100_000)
+            body = json.loads(self.rfile.read(length) or b"{}")
+            if self.path == "/api/runs":
+                result = start_run(body.get("prompt", ""))
+                print(f"started {result['run']} on issue #{result['issue']}")
+                return self.send(200, result)
+            m = re.match(r"^/api/runs/([^/]+)/feedback$", self.path)
+            if m:
+                result = give_feedback(m.group(1), body.get("text", ""))
+                print(f"feedback for {m.group(1)}")
+                return self.send(200, result)
+            return self.send(404, {"error": "not found"})
+        except (ValueError, RuntimeError) as e:
+            return self.send(400, {"error": str(e)})
+
+
+def main(argv):
+    parser = argparse.ArgumentParser(description="The control room for every run.")
+    parser.add_argument("--port", type=int, default=8000)
+    args = parser.parse_args(argv)
+    server = ThreadingHTTPServer(("127.0.0.1", args.port), Handler)
+    print(f"Control room: http://127.0.0.1:{args.port}   (Ctrl+C stops it; runs keep going)")
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        print("\nstopped")
+
+
+if __name__ == "__main__":
+    main(sys.argv[1:])

@@ -11,7 +11,7 @@ One set of agent roles, three ways to drive them (the autonomy dial):
 ```
  L1 pair        /intent → /spec → /plan → build together → /verify → /review
  L2 supervised  /factory run <issue>            (a skill in a Claude Code session, with a dashboard)
-    or, live    /orch_factory <issue | idea>     (in the tac-combined orchestrator UI: every agent visible)
+ watch all     factory/bin/serve → http://127.0.0.1:8000   (the control room: Board + live Agents)
  L3 unattended  uv run adws/adw_sdlc_iso.py <issue>, or an `adw` comment on the issue
  ─────────────────────────────────────────────────────────────────────────────
  roles   intake · scout · planner · builder · verifier · reviewer-bugs · reviewer-spec · reviewer-security · approver
@@ -40,7 +40,8 @@ pnpm test
 Also needs [Claude Code](https://claude.com/claude-code), `gh` (logged in), `uv` and Python 3.11+.
 
 - **Pair (L1):** open Claude Code here and run `/intent <idea>`.
-- **Supervised (L2):** label an issue `factory`, then `/factory run <n>`. Watch it on the dashboard: `cd factory && python3 -m http.server`, then open http://localhost:8000/dashboard.html.
+- **Supervised (L2):** label an issue `factory`, then `/factory run <n>`.
+- **The control room:** `factory/bin/serve`, then open http://127.0.0.1:8000. The **Board** shows every run, whichever driver started it. A run's **Agents** tab shows each agent's actions live, plus the orchestrator's decisions. The **prompt box** files an issue and starts an unattended run.
 - **Unattended (L3):** `uv run adws/adw_sdlc_iso.py <n>`, or start `uv run adws/adw_triggers/trigger_cron.py` and comment `adw` on the issue.
 
 Each driver ends with a pull request labelled `factory:needs-human`. To check it locally, run `/try <pr>`; then merge it on GitHub. Nothing in the harness can merge. Afterwards, `/factory run` (or `factory/bin/job queue`) closes out factory jobs; for an ADW run, use `uv run adws/adw_cleanup_iso.py <issue> <adw_id>`.

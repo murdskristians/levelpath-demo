@@ -11,8 +11,8 @@ This repo's agent harness is built from three earlier harnesses. What came from 
 
 ## Tactical Agentic Coding and multi-agent orchestration, by IndyDevDan
 
-- The AI Developer Workflow (ADW) design behind `adws/` (via [git-adw](https://github.com/murdskristians/git-adw)).
-- The orchestrator's agent templates and the `meta-prompt` skill (via [tac-combined](https://github.com/murdskristians/tac-combined), a fork of [multi-agent-orchestration](https://github.com/murdskristians/multi-agent-orchestration)).
+- The AI Developer Workflow (ADW) design behind `adws/` (via git-adw, Chris's private course repository).
+- The orchestrator's agent templates and the `meta-prompt` skill (via tac-combined, a private fork of multi-agent-orchestration).
 - All credit for the original architecture belongs to IndyDevDan.
 
 ## This repo
