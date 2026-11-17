@@ -1,0 +1,118 @@
+#!/usr/bin/env -S uv run
+# /// script
+# requires-python = ">=3.11"
+# dependencies = ["schedule", "python-dotenv", "pydantic"]
+# ///
+
+"""The T in PITER: start ADW runs from GitHub issue comments. Opt-in.
+
+Usage: uv run adws/adw_triggers/trigger_cron.py
+
+Polls the repo's open issues every ADW_POLL_SECONDS (default 60) and starts a
+run only for a new comment **by the operator** (the account `gh` is logged in
+as) whose first line is exactly:
+
+  adw              → adw_sdlc_iso.py on the issue (resumes a run waiting on NEEDS-INFO)
+  adw patch        → adw_patch_iso.py on the issue's latest run; the rest of the
+                     comment is the feedback
+
+Anything else is ignored: new issues, other people's comments (the repo is
+public, so issue text is untrusted input), and the ADWs' own `[ADW-BOT]`
+comments. Comments that already exist when the trigger starts are never
+acted on. No LLM is asked what a comment means. Nothing runs on a schedule
+unless you start this script, and it never merges anything.
+"""
+
+import os
+import signal
+import subprocess
+import sys
+import time
+from pathlib import Path
+from typing import Dict, Optional
+
+import schedule
+from dotenv import load_dotenv
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from adw_modules.github import (extract_repo_path, fetch_issue_comments,  # noqa: E402
+                                fetch_open_issues, get_repo_url, operator_login)
+from adw_modules.pipeline import latest_run  # noqa: E402
+from adw_modules.roles import MARKER  # noqa: E402
+from adw_modules.state import ADWState  # noqa: E402
+
+load_dotenv()
+
+POLL_SECONDS = max(60, int(os.getenv("ADW_POLL_SECONDS", "60")))
+ADWS = Path(__file__).resolve().parents[1]
+REPO_PATH = extract_repo_path(get_repo_url())
+OPERATOR = operator_login()
+
+seen: Dict[int, Optional[str]] = {}  # issue → id of the last comment looked at
+shutdown = False
+
+
+def on_signal(signum, _frame):
+    global shutdown
+    print(f"\nINFO: signal {signum}, stopping after the current poll")
+    shutdown = True
+
+
+def command_for(issue_number: int) -> Optional[list]:
+    """The workflow command a new operator comment asks for, or None."""
+    comments = fetch_issue_comments(REPO_PATH, issue_number)
+    if not comments:
+        return None
+    latest = comments[-1]
+    if seen.get(issue_number) == latest["id"]:
+        return None
+    first_time = issue_number not in seen
+    seen[issue_number] = latest["id"]
+    if first_time:
+        return None  # existing comments are history, not commands
+    body = (latest.get("body") or "").strip()
+    if MARKER in body or latest.get("author", {}).get("login") != OPERATOR:
+        return None
+    first, _, rest = body.partition("\n")
+    words = first.strip().lower().split()
+    if words == ["adw"]:
+        run = latest_run(str(issue_number))
+        state = ADWState.load(run) if run else None
+        resume = run if state and state.get("stage") == "needs-info" else None
+        return ["adw_sdlc_iso.py", str(issue_number)] + ([resume] if resume else [])
+    if words == ["adw", "patch"] and rest.strip():
+        run = latest_run(str(issue_number))
+        if not run:
+            print(f"INFO: #{issue_number}: `adw patch` but no earlier ADW run for this issue")
+            return None
+        return ["adw_patch_iso.py", str(issue_number), run, rest.strip()]
+    return None
+
+
+def poll():
+    for issue in fetch_open_issues(REPO_PATH):
+        if shutdown:
+            return
+        cmd = command_for(issue.number)
+        if not cmd:
+            continue
+        print(f"INFO: #{issue.number}: running {' '.join(cmd[:3])}")
+        # Not captured: the run's progress streams live into this terminal
+        result = subprocess.run(["uv", "run", str(ADWS / cmd[0]), *cmd[1:]], cwd=str(ADWS.parent))
+        print(f"INFO: #{issue.number}: {cmd[0]} exited {result.returncode}")
+
+
+def main():
+    signal.signal(signal.SIGINT, on_signal)
+    signal.signal(signal.SIGTERM, on_signal)
+    print(f"INFO: watching {REPO_PATH} every {POLL_SECONDS}s for `adw` / `adw patch` comments by @{OPERATOR}")
+    poll()  # the first poll only records what already exists
+    schedule.every(POLL_SECONDS).seconds.do(poll)
+    while not shutdown:
+        schedule.run_pending()
+        time.sleep(1)
+
+
+if __name__ == "__main__":
+    main()

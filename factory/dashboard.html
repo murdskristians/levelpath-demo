@@ -285,8 +285,8 @@
 <script>
 const POLL_MS = 2000
 const COLUMNS = [
-  { label: 'Intake', who: 'intake · fable', stages: ['intake', 'needs-info'] },
-  { label: 'Spec', who: 'spec-writer · opus', stages: ['spec'] },
+  { label: 'Intake', who: 'intake · sonnet', stages: ['intake', 'needs-info'] },
+  { label: 'Spec', who: 'scout · planner', stages: ['spec'] },
   { label: 'Build', who: 'builder · gate', stages: ['build', 'gate'] },
   { label: 'Review', who: 'routed reviewers', stages: ['review'] },
   { label: 'Approve', who: 'approver · recommends', stages: ['approve'] },
@@ -295,7 +295,7 @@ const COLUMNS = [
 ]
 const STAGES = new Set(COLUMNS.flatMap((c) => c.stages))
 const LIVE = new Set(['intake', 'spec', 'build', 'gate', 'review', 'approve'])
-const SHORT = { code: 'code', ux: 'ux', ui: 'ui', security: 'sec' }
+const SHORT = { verify: 'verify', bugs: 'bugs', spec: 'spec', security: 'sec' }
 
 const $ = (id) => document.getElementById(id)
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) =>
@@ -474,8 +474,8 @@ async function listFiles(dir) {
   return out
 }
 
-const ORDER = ['issue.md', 'intake.md', 'spec.md', 'build.md', 'decision.md', 'rejection.md']
-const ROUND_ORDER = ['checks', 'review-code', 'review-security', 'review-ux', 'review-ui']
+const ORDER = ['issue.md', 'intake.md', 'scout.md', 'spec.md', 'plan.md', 'build.md', 'decision.md', 'rejection.md']
+const ROUND_ORDER = ['checks', 'review-verify', 'review-bugs', 'review-spec', 'review-security']
 
 function fileRank(path) {
   if (ORDER.includes(path)) return [0, ORDER.indexOf(path), path]

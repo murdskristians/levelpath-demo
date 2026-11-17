@@ -145,8 +145,12 @@ check("worktree path uses forward slashes", "\\" not in wt and wt.endswith("/.wo
 (jd / "intake.md").write_text("DECISION: ACCEPT\nRESCOPED: no\nRISK: low\nSURFACES: ui\n\nGood idea — build it.\n",
                               encoding="utf-8")
 r = sh([BASH, "-lc", f"factory/bin/route {jid}"], proj, env=env)
-check("route runs and records reviewers", r.returncode == 0 and "reviewers code haiku, ux sonnet, ui haiku" in r.stdout,
+check("route runs and records reviewers (risk picks the models)",
+      r.returncode == 0 and "reviewers verify sonnet, bugs sonnet, spec haiku; planner and builder sonnet" in r.stdout,
       r.stdout + r.stderr)
+agents = json.loads((jd / "job.json").read_text())["agents"]
+check("route records planner and builder models", agents.get("planner") == "sonnet" and agents.get("builder") == "sonnet",
+      agents)
 
 # ---- 4. advance → spec creates the real worktree from origin/main ----
 jmain(["advance", jid, "spec"])
@@ -219,7 +223,7 @@ check("cost found from a UTF-8 transcript, even without -X utf8 ($0.10)", "$0.10
 
 # ---- 9. no merge: reviews pass, the approver recommends, the job waits for a person ----
 check("advance review", jmain(["advance", jid, "review"]) == 0)
-for reviewer in ("code", "ux", "ui"):
+for reviewer in json.loads((jd / "job.json").read_text())["agents"]["reviewers"]:
     (jd / f"round-1/review-{reviewer}.md").write_text("VERDICT: PASS\n\n## Summary\n- fine\n")
 check("advance approve", jmain(["advance", jid, "approve"]) == 0)
 check("approve → merging is illegal", jmain(["advance", jid, "merging"]) != 0)

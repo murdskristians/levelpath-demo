@@ -6,6 +6,11 @@ Usage: route <job-id>
 Reads `risk` and `surfaces` from intake.md (through job.json), looks them up in
 config.json's `routing` and `surface_reviewers` tables, and records the result
 in job.json with `job agents`. Prints the agent set.
+
+Risk decides each reviewer's model; a surface only adds reviewers. So a high
+risk job keeps its opus security reviewer when a `db` surface also asks for
+one. `builder_models` gives the planner's and builder's model by risk.
+The ADWs read the same tables (adws/adw_modules/roles.py).
 """
 
 import json
@@ -41,12 +46,15 @@ def main(argv):
         extra = CONFIG["surface_reviewers"].get(surface)
         if extra is None:
             die(f"surface {surface!r} isn't in config.json surface_reviewers ({', '.join(CONFIG['surface_reviewers'])})")
-        reviewers.update(extra)
-    agents = {"reviewers": reviewers}
+        for reviewer, model in extra.items():
+            reviewers.setdefault(reviewer, model)  # the risk table's model wins
+    model = CONFIG.get("builder_models", {}).get(intake["risk"], "sonnet")
+    agents = {"reviewers": reviewers, "planner": model, "builder": model}
     res = subprocess.run([*python, job_bin, "agents", job_id, json.dumps(agents)], capture_output=True, text=True)
     if res.returncode != 0:
         die(res.stderr.strip())
-    print(f"{job_id}: reviewers " + ", ".join(f"{k} {v}" for k, v in reviewers.items()))
+    print(f"{job_id}: reviewers " + ", ".join(f"{k} {v}" for k, v in reviewers.items())
+          + f"; planner and builder {model}")
 
 
 if __name__ == "__main__":

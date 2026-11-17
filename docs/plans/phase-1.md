@@ -58,6 +58,8 @@ I stop and wait at three points so you can commit.
 
 ## Step 2: Import as-is → Stop A
 
+**Done 2026-11-17**: commit `7cb2738` (76 files from the three sources, unmodified).
+
 Copied unmodified, each source pinned to a commit:
 
 - **Fork, at the Step 0 commit:** `.claude/skills/factory/`, the 8 factory agents, and `factory/` (bin, `config.json`, `checks.sh`, `dashboard.html`, `.gitattributes`, `tests/`).
@@ -73,6 +75,8 @@ Copied unmodified, each source pinned to a commit:
   - build, lint and test still pass.
 
 ## Step 3: Adapt → Stop B (one changelog entry each)
+
+**Done 2026-11-17**, waiting for your commit. Deviation: `REVIEW.md` and `docs/templates/` were pulled forward from Step 4 because the roles reference them. Every item has an entry in `docs/HARNESS_CHANGELOG.md`.
 
 **Shared core**
 

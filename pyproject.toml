@@ -1,0 +1,12 @@
+[project]
+name = "levelpath-demo-harness"
+version = "0.1.0"
+description = "The ADWs (headless driver L3) of this repo's agent harness. The app itself is TypeScript (pnpm)."
+requires-python = ">=3.11"
+# Only what adws/ imports. Each script also declares its own (PEP 723) so
+# `uv run adws/<script>.py` works without a project install.
+dependencies = [
+    "python-dotenv>=1.0.0",
+    "pydantic>=2.0",
+    "schedule>=1.2.0",
+]
