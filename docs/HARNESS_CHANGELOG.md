@@ -310,3 +310,29 @@ Format:
   - The control room replaces it here.
   - The credits name the private sources without linking them.
 - **Why:** A public demo repo must run from a clone, with nothing hidden behind private links.
+
+## 2026-11-17: Code from private repositories was published, then scrubbed
+
+- **What went wrong:**
+  - Phase 1 recommended a public GPLv3 repository and imported code from git-adw and tac-combined without checking where it came from. Both are **private**: course material (IndyDevDan's Tactical Agentic Coding and multi-agent orchestration).
+  - Their code was public here for about five hours: in the unmodified import commit, and adapted in later commits. GitHub recorded 0 forks, 0 views and 0 clones.
+  - Found while fixing `CREDITS.md` links that led nowhere.
+- **Before:**
+  - `adws/` kept six modules and a health check adapted from git-adw.
+  - `.claude/` kept tac-combined's `meta-agent` and `meta-prompt` skill.
+  - Every commit since the import carried the originals.
+- **After:**
+  - **Replaced:** new `adws/adw_modules` `gh`, `state`, `worktrees`, `shots`, `logs` and a new `health_check.py` replace the adapted ones. The two tac-combined tools are removed. `CREDITS.md` and `docs/HARNESS.md` say only ideas came over.
+  - **History rewritten:**
+    - Every file whose content matched a private original was removed from every commit, and so were the adapted files before the replacement commit.
+    - 0 of 58 private blobs remain reachable, no private identifier remains, and the final tree is byte-identical.
+    - Commit messages and Chris's own work keep their history.
+  - **The repository** was copied first (a full mirror, plus every issue, PR, comment and review as JSON and Markdown, kept locally), then deleted and recreated. Recreating it was the only way to also drop GitHub's permanent PR references to the old commits.
+  - **`CLAUDE.md`, "Things Claude gets wrong":** before code from another repository goes into this public one, check its visibility. From a private source, only ideas come over.
+- **Evidence:** the rewritten ADW engine on the new repository's issue #1, "Add a page footer with the app name and the current year" (run `cf2c382c`):
+  - **One round, all PASS:** intake ACCEPT (feature, low, ui) → planner → builder → gate PASS in 33 s → verify, bugs and spec PASS → approver READY.
+  - **The result:** PR #2, ready, not merged. The hand-over comment now renders its heading.
+  - **Visual check:** the verifier's screenshots at desktop and 320 px show the footer.
+  - **Cost:** $0.52, API-equivalent.
+- **Note:** issue and PR numbers in the entries above this one refer to the deleted repository. Its copy holds them.
+- **Why this prevents a repeat:** The check sits in the file every session reads first. The ADW engine is now entirely this repository's own code, so nothing in it depends on a private source.
