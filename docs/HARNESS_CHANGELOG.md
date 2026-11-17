@@ -262,3 +262,16 @@ Format:
   - **In tac-combined:** `/orch_sdlc_zte` is removed, and the aliases point at `claude-sonnet-5-5`, `claude-opus-5-5` and `claude-haiku-5-5`. tac agents load this repo's settings, so `guard.py` blocks merges there too.
   - **`factory/bin/job` cost:** it also counts agents that are their own sessions (tac's), found by the header's `Job folder:`. An unpriced model is now a warning, not a stop: on MyPersonalWebsite one stopped a job at intake. The factory tests still pass, 35/35.
 - **Why:** Four drivers, one set of agents, rules and judges. The UI only changes who orchestrates and how much you can see.
+
+## 2026-11-17: Worktrees could not be removed on Windows ("Filename too long")
+
+- **What went wrong:**
+  - After PRs #3 and #4 were merged, `factory/bin/job queue` moved job 001 to `merged`, but deleting its worktree failed with `Filename too long`.
+  - `git worktree remove` failed the same way for the ADW run.
+  - pnpm's `node_modules` have paths over Windows' 260-character limit. Git let go of the worktrees but left their folders, which nothing could delete by hand.
+- **Before:** `remove_worktree` printed "close whatever has files open" (the wrong diagnosis) and left the folder. The ADWs had no step after a merge at all.
+- **After:**
+  - **Long-path deletion:** `rmtree_long` in `factory/bin/job` and `adws/adw_modules/worktree_ops.py` deletes with the Windows long-path prefix (two backslashes, `?`, a backslash) and clears read-only flags. Tested on a 447-character tree.
+  - **Cleanup:** both drivers then run `git worktree prune`. The new `adws/adw_cleanup_iso.py <issue> <adw_id>` closes out an ADW run after the merge: worktree, local branch and label, and the run is recorded as `merged`. Tested on run `ec19ba08`.
+  - **Git:** this clone also has `core.longpaths=true`.
+- **Why this prevents a repeat:** The cleanup no longer depends on git handling long paths, and each driver has a defined last step after a person merges.

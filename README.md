@@ -43,7 +43,7 @@ Also needs [Claude Code](https://claude.com/claude-code), `gh` (logged in), `uv`
 - **Supervised (L2):** label an issue `factory`, then `/factory run <n>`. Watch it on the dashboard: `cd factory && python3 -m http.server`, then open http://localhost:8000/dashboard.html.
 - **Unattended (L3):** `uv run adws/adw_sdlc_iso.py <n>`, or start `uv run adws/adw_triggers/trigger_cron.py` and comment `adw` on the issue.
 
-Each driver ends with a pull request labelled `factory:needs-human`. To check it locally, run `/try <pr>`; then merge it on GitHub. Nothing in the harness can merge.
+Each driver ends with a pull request labelled `factory:needs-human`. To check it locally, run `/try <pr>`; then merge it on GitHub. Nothing in the harness can merge. Afterwards, `/factory run` (or `factory/bin/job queue`) closes out factory jobs; for an ADW run, use `uv run adws/adw_cleanup_iso.py <issue> <adw_id>`.
 
 ## Layout
 

@@ -579,14 +579,34 @@ def job_ports(job):
     return [ports["base"] + ports["step"] * n + k for k in range(3)]
 
 
+def rmtree_long(path):
+    """Delete a folder even when its paths pass Windows' 260-character limit
+    (pnpm's node_modules do), and even when git made files read-only."""
+    import shutil
+    import stat
+
+    def writable(func, p, _exc):
+        os.chmod(p, stat.S_IWRITE)
+        func(p)
+
+    full = os.path.abspath(path)
+    if WINDOWS:
+        full = "\\\\?\\" + full[0].upper() + full[1:]  # the \\?\ prefix lifts the limit
+    shutil.rmtree(full, onexc=writable)
+
+
 def remove_worktree(job):
     for port in job_ports(job):
         subprocess.run([*PYTHON, str(BIN / "port"), "stop", str(port)], capture_output=True, text=True)
     res = run(["git", "worktree", "remove", "--force", job["worktree"]], check=False)
-    if res.returncode != 0:
-        print(f"job: couldn't remove {job['worktree']}: {(res.stderr or res.stdout).strip()}. "
-              "Close whatever still has files open there, then run `git worktree prune`.",
-              file=sys.stderr)
+    if res.returncode != 0 and Path(job["worktree"]).exists():
+        # git can't delete paths over 260 characters on Windows ("Filename too long")
+        try:
+            rmtree_long(job["worktree"])
+        except OSError as e:
+            print(f"job: couldn't remove {job['worktree']}: {e}. Close whatever still has files "
+                  "open there, delete the folder, then run `git worktree prune`.", file=sys.stderr)
+    run(["git", "worktree", "prune"], check=False)
     run(["git", "branch", "-D", job["branch"]], check=False)
 
 
