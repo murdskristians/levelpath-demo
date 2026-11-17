@@ -336,3 +336,18 @@ Format:
   - **Cost:** $0.52, API-equivalent.
 - **Note:** issue and PR numbers in the entries above this one refer to the deleted repository. Its copy holds them.
 - **Why this prevents a repeat:** The check sits in the file every session reads first. The ADW engine is now entirely this repository's own code, so nothing in it depends on a private source.
+
+## 2026-11-17: Screenshots show inline in the PR
+
+- **What went wrong:** PR #2's hand-over listed the verifier's screenshots as local paths (`C:\Users\...\agents\cf2c382c\round-1\shots\...`). The reviewer couldn't see them, and the comment published a path from Chris's machine. The cause was that the uploader only worked with a `GITHUB_PAT`, which `.env` doesn't have. The factory (L2) never attached screenshots at all.
+- **Before:** `adws/adw_modules/shots.py` (ADW only) uploaded through the REST API with its own token, or fell back to local paths.
+- **After:**
+  - **One uploader for both drivers:** `factory/bin/shots`. It stores the images in your public `<you>/adw-screenshots` under `<project>/<run>/<file>` and the comment links the raw URLs, which GitHub renders inline.
+  - **Through `gh api`:** it uses your `gh auth login` (or `GITHUB_PAT` when set), so it never reads or prints a token. The first version used Python's own HTTPS and crashed on this machine (`OPENSSL_Uplink`); `gh` handles TLS, as it does for everything else here.
+  - **Only for a public repo:** if the project's repository is private, the images stay local, so they aren't published while the code is not.
+  - **Never in the way:** with no login, no network or a non-GitHub origin it says why on stderr, and the comment lists file names relative to the repository, not machine paths.
+  - **Wired in:** `job advance <id> needs-human` appends the section to the PR comment (L2); the ADW hand-over calls the same script (L3). `adw_modules/shots.py` is removed.
+- **Evidence:**
+  - `factory/tests/run_test.py`: 42 checks pass (7 new: hand-over lists a repo path, upload path and URL, private repo, logged-out `gh`, non-GitHub origin, usage).
+  - A real upload of PR #2's two screenshots returned URLs that serve `200 OK`; the ADW's own `screenshots()` produced the same section from the real run.
+- **Why:** A review comment should show what the verifier saw. Evidence you have to dig for is evidence nobody checks.

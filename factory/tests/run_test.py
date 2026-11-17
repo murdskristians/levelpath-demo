@@ -57,7 +57,7 @@ BOX.mkdir(parents=True)
 origin, proj = BOX / "origin.git", BOX / "project"
 sh(["git", "init", "-q", "--bare", "-b", "main", str(origin)], BOX)
 sh(["git", "clone", "-q", str(origin), str(proj)], BOX)
-for rel in ["factory/bin/job", "factory/bin/gate", "factory/bin/route", "factory/bin/port",
+for rel in ["factory/bin/job", "factory/bin/gate", "factory/bin/route", "factory/bin/port", "factory/bin/shots",
             "factory/config.json", "factory/.gitattributes"]:
     (proj / rel).parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(SRC / rel, proj / rel)
@@ -230,16 +230,70 @@ check("approve → merging is illegal", jmain(["advance", jid, "merging"]) != 0)
 (jd / "decision.md").write_text("APPROVE\n\n## Summary\n- old verdict\n")
 check("an APPROVE verdict is refused (READY or ESCALATE only)", jmain(["advance", jid, "needs-human"]) != 0)
 (jd / "decision.md").write_text("READY\n\n## Summary\n- would merge it\n\n## For the human\nLook at app.txt.\n")
+(jd / "round-1/shots").mkdir(parents=True, exist_ok=True)
+(jd / "round-1/shots/01_page.png").write_bytes(b"\x89PNG fake")
 gh_calls.clear()
 check("READY → needs-human", jmain(["advance", jid, "needs-human"]) == 0
       and json.loads((jd / "job.json").read_text())["stage"] == "needs-human")
 pr_comments = [c for c in gh_calls if c[:2] == ("pr", "comment")]
 check("READY posts 'ready for your review' on the PR",
       pr_comments and "ready for your review (you merge)" in pr_comments[0][-1], gh_calls)
+check("the hand-over lists the screenshot by a path inside the repo, never this machine's path",
+      "#### Screenshots" in pr_comments[0][-1] and "01_page.png" in pr_comments[0][-1]
+      and str(BOX).replace("\\", "/") not in pr_comments[0][-1].replace("\\", "/"), pr_comments[0][-1])
 check("no gh pr merge was called", not any(c[:2] == ("pr", "merge") for c in gh_calls), gh_calls)
 r = sh([BASH, "-lc", f"factory/bin/job merge {jid}"], proj, env=env)
 check("`job merge` is refused as bad arguments", r.returncode != 0 and "bad arguments" in r.stderr,
       r.stdout + r.stderr)
+
+# ---- 9b. screenshots: uploaded to a public store for a public repo, kept local otherwise ----
+loader = importlib.machinery.SourceFileLoader("factory_shots", str(proj / "factory/bin/shots"))
+spec = importlib.util.spec_from_loader("factory_shots", loader)
+shots = importlib.util.module_from_spec(spec)
+loader.exec_module(shots)
+png = proj / "page one.png"
+png.write_bytes(b"\x89PNG data")
+puts = []
+repo_info = {"private": False}
+
+
+def fake_github(method, path, body=None):
+    if method == "PUT":
+        puts.append((path, body))
+        return {}
+    if path == "/repos/me/proj":
+        return repo_info
+    if path == "/user":
+        return {"login": "me"}
+    if path == "/repos/me/adw-screenshots":
+        return {"default_branch": "main"}
+    return None  # the file isn't in the store yet
+
+
+shots.origin = lambda: ("me", "proj")
+urls = shots.upload("007-job", [png], fake_github)
+check("a public repo's screenshot goes to <you>/adw-screenshots/<project>/<run>/<file>",
+      list(urls.values()) == ["https://raw.githubusercontent.com/me/adw-screenshots/main/proj/007-job/page%20one.png"]
+      and puts and puts[0][0] == "/repos/me/adw-screenshots/contents/proj/007-job/page%20one.png", (urls, puts))
+check("the comment section shows it inline",
+      shots.markdown("007-job", [png], fake_github)
+      .startswith("#### Screenshots\n\n![page one.png](https://raw.githubusercontent.com/me/"))
+puts.clear()
+repo_info["private"] = True
+check("a private repo's screenshots are never published",
+      shots.upload("007-job", [png], fake_github) == {} and not puts, puts)
+repo_info["private"] = False
+
+
+def gh_logged_out(method, path, body=None):
+    raise RuntimeError("To get started with GitHub CLI, please run:  gh auth login")
+
+
+check("gh not logged in: nothing is uploaded, no error", shots.upload("007-job", [png], gh_logged_out) == {})
+shots.origin = lambda: (None, "proj")
+check("origin not on GitHub: nothing is uploaded", shots.upload("007-job", [png], fake_github) == {})
+r = sh([BASH, "-lc", "factory/bin/shots"], proj, env=env)
+check("shots without arguments prints usage and exits 2", r.returncode == 2 and "Usage:" in r.stderr, r.stderr)
 
 # ---- 10. a person merges on GitHub: the job's dev server is stopped, then the worktree removed ----
 port = 5100 + 10 * 1

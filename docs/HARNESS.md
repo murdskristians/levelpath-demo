@@ -35,17 +35,17 @@ The drivers differ only in who orchestrates, so moving work along the autonomy d
 
 ## A run, step by step
 
-| Step      | Who                                                | Writes                                  | First line the driver reads                |
-| --------- | -------------------------------------------------- | --------------------------------------- | ------------------------------------------ |
-| intake    | `intake` agent                                     | `intake.md`                             | `DECISION: ACCEPT \| NEEDS-INFO \| REJECT` |
-| route     | `factory/bin/route` (L2), `adws/.../roles.py` (L3) | reviewers and models from `config.json` | -                                          |
-| scout     | `scout` agent, high risk only                      | `scout.md`                              | `SCOUT: …`                                 |
-| plan      | `planner` agent                                    | `spec.md`, `plan.md`                    | a title                                    |
-| build     | `builder` agent, in a worktree                     | code, the draft PR, `build.md`          | `STATUS: READY \| BLOCKED`                 |
-| gate      | `factory/bin/gate`                                 | `round-N/checks.md`                     | `GATE: PASS \| FAIL`                       |
-| review    | `verifier` + reviewers, in parallel                | `round-N/review-<pass>.md`, screenshots | `VERDICT: PASS \| CHANGES`                 |
-| approve   | `approver` agent                                   | `decision.md`                           | `READY \| ESCALATE`                        |
-| hand-over | the driver                                         | PR ready, decision posted, label        | -                                          |
+| Step      | Who                                                | Writes                                           | First line the driver reads                |
+| --------- | -------------------------------------------------- | ------------------------------------------------ | ------------------------------------------ |
+| intake    | `intake` agent                                     | `intake.md`                                      | `DECISION: ACCEPT \| NEEDS-INFO \| REJECT` |
+| route     | `factory/bin/route` (L2), `adws/.../roles.py` (L3) | reviewers and models from `config.json`          | -                                          |
+| scout     | `scout` agent, high risk only                      | `scout.md`                                       | `SCOUT: …`                                 |
+| plan      | `planner` agent                                    | `spec.md`, `plan.md`                             | a title                                    |
+| build     | `builder` agent, in a worktree                     | code, the draft PR, `build.md`                   | `STATUS: READY \| BLOCKED`                 |
+| gate      | `factory/bin/gate`                                 | `round-N/checks.md`                              | `GATE: PASS \| FAIL`                       |
+| review    | `verifier` + reviewers, in parallel                | `round-N/review-<pass>.md`, screenshots          | `VERDICT: PASS \| CHANGES`                 |
+| approve   | `approver` agent                                   | `decision.md`                                    | `READY \| ESCALATE`                        |
+| hand-over | the driver                                         | PR ready, decision and screenshots posted, label | -                                          |
 
 A gate failure or a CHANGES verdict starts the next build round, up to three, then a person decides. Every agent prompt starts with the same header: `Job: … Job folder: … Main checkout: … Worktree: … Branch: … Base: … Issue: …`.
 
@@ -75,7 +75,7 @@ Code from the public ZazenCodes factory (GPLv3) was adapted here. From my two pr
 | Part                                                         | Source                                                   | What changed                                                                                                            |
 | ------------------------------------------------------------ | -------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
 | `.claude/skills/factory/`, `factory/bin/*`, `dashboard.html` | factory fork `82b82ca` (ZazenCodes, GPLv3)               | Windows port, never merges, shared roles, risk-routed models, `gate --run` for every driver, the control room (`serve`) |
-| `factory/tests/run_test.py`                                  | written for the fork                                     | 35 checks: Windows, locks, gate, hook, cost, no-merge                                                                   |
+| `factory/tests/run_test.py`                                  | written for the fork                                     | 42 checks: Windows, locks, gate, hook, cost, no-merge, shots                                                            |
 | `intake`, `builder`, `approver`, `reviewer-security`         | factory fork                                             | `TYPE:` (feature, bug, chore), this stack, tenant isolation; the approver only recommends                               |
 | `planner`                                                    | factory `spec-writer`, plus git-adw's typed plans (idea) | writes `spec.md` and `plan.md`; checks library versions first                                                           |
 | `verifier`, `reviewer-bugs`, `reviewer-spec`, `scout`        | written here, from ideas in all three                    | run the app, find bugs, trace the spec, scout the code; findings Important/Nit (`REVIEW.md`)                            |

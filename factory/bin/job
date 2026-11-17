@@ -422,6 +422,24 @@ def check_reviews_done(job):
     require(not bad, f"first line isn't a verdict in review-{bad[0]}.md" if bad else "")
 
 
+def screenshots_md(job):
+    """The "#### Screenshots" section for the hand-over comment: the verifier's
+    images of the last round, uploaded by factory/bin/shots so the PR shows them
+    inline. Evidence, never a gate: any problem leaves the comment without it."""
+    found = sorted((round_dir(job) / "shots").glob("*.png")) if job["round"] else []
+    if not found:
+        return ""
+    try:
+        res = subprocess.run([*PYTHON, str(BIN / "shots"), "--markdown", job["id"], *map(str, found)],
+                             cwd=REPO, capture_output=True, text=True, encoding="utf-8")
+    except OSError as e:
+        print(f"job: screenshots left out of the comment: {e}", file=sys.stderr)
+        return ""
+    if res.stderr.strip():
+        print(res.stderr.strip(), file=sys.stderr)
+    return res.stdout.strip() if res.returncode == 0 else ""
+
+
 def next_round(job):
     job["round"] += 1
     round_dir(job).mkdir(exist_ok=True)
@@ -556,6 +574,9 @@ def advance(job, stage):
         title = ("Factory: ready for your review (you merge)" if verdict.strip() == "READY"
                  else "Factory: needs a human")
         body = f"### {title}\n\n{rest.strip()}"
+        shots = screenshots_md(job)
+        if shots:
+            body += f"\n\n{shots}"
         if job["pr"]:
             if gh_json("pr", "view", str(job["pr"]), "--json", "isDraft")["isDraft"]:
                 gh("pr", "ready", str(job["pr"]))

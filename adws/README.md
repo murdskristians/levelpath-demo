@@ -59,9 +59,12 @@ comment.
 - `gh auth login`, and `claude` logged in to your subscription. No
   `ANTHROPIC_API_KEY` is needed or passed on, unless you set
   `ADW_USE_API_KEY=true`.
-- Optional, in `.env` (see `.env.sample`): `GITHUB_PAT` for screenshot uploads
-  to `<you>/adw-screenshots`; `AGENT_BROWSER_EXECUTABLE_PATH` for the
-  verifier's browser.
+- Screenshots in the PR comment need nothing extra: `factory/bin/shots`
+  (shared with the factory) uploads them to your public
+  `<you>/adw-screenshots` through `gh`, and only for a public repository.
+- Optional, in `.env` (see `.env.sample`): `GITHUB_PAT`, if you want the ADWs'
+  `gh` calls to use a token instead of `gh auth login`;
+  `AGENT_BROWSER_EXECUTABLE_PATH` for the verifier's browser.
 - Windows with Avast: run `uv` with `UV_NATIVE_TLS=1` the first time, so it can
   download the scripts' dependencies.
 

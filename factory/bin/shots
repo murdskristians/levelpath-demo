@@ -1,0 +1,144 @@
+#!/usr/bin/env -S python3 -X utf8
+"""Put a run's screenshots where a GitHub comment can show them.
+
+GitHub has no API for attaching images to a comment, and a local path shows
+nothing to the reviewer. So the images go to a public repository of yours,
+<you>/adw-screenshots, under <project>/<run-id>/<file>, and the comment links
+the raw URLs, which GitHub renders inline.
+
+Both drivers use it: `factory/bin/job` (L2) when a job reaches needs-human, and
+the ADW pipeline (L3) in its hand-over.
+
+Never in the way. When it can't or shouldn't upload, it says why on stderr,
+exits 0 and the comment lists the file names instead:
+  - the project's own repository is not public (its screenshots would be
+    published while the code is not);
+  - origin isn't on GitHub, `gh` isn't logged in, or the upload fails.
+
+It talks to GitHub only through `gh api` (your `gh auth login`, or GITHUB_PAT
+when set), so it never handles a token itself.
+
+Usage:
+  shots <run-id> <file>...             JSON {file: url} for every file uploaded
+  shots --markdown <run-id> <file>...  the "#### Screenshots" section for a comment
+"""
+
+import base64
+import json
+import os
+import re
+import subprocess
+import sys
+import urllib.parse
+from pathlib import Path
+
+STORE = "adw-screenshots"
+IMAGES = {".png", ".jpg", ".jpeg", ".gif", ".webp"}
+
+
+def say(message):
+    print(f"shots: {message}", file=sys.stderr)
+
+
+def origin():
+    """(owner, name) of the origin remote when it is on GitHub, else (None, folder name)."""
+    res = subprocess.run(["git", "remote", "get-url", "origin"], capture_output=True, text=True)
+    url = res.stdout.strip() if res.returncode == 0 else ""
+    m = re.search(r"github\.com[:/]([^/]+)/([^/]+?)(?:\.git)?/?$", url)
+    if m:
+        return m.group(1), m.group(2)
+    return None, Path.cwd().name
+
+
+def api(method, path, body=None):
+    """One GitHub REST call through `gh api`: its login (or GH_TOKEN from GITHUB_PAT),
+    its TLS handling, and no token for this script to read or print. None for a 404."""
+    env = dict(os.environ)
+    if os.environ.get("GITHUB_PAT"):
+        env["GH_TOKEN"] = os.environ["GITHUB_PAT"]
+    cmd = ["gh", "api", "-X", method, path] + ([] if body is None else ["--input", "-"])
+    res = subprocess.run(cmd, input=None if body is None else json.dumps(body), capture_output=True,
+                         text=True, encoding="utf-8", env=env)
+    if res.returncode != 0:
+        if "HTTP 404" in res.stderr:
+            return None
+        raise RuntimeError((res.stderr.strip() or res.stdout.strip() or "gh failed")[:300])
+    return json.loads(res.stdout or "{}")
+
+
+def upload(run_id, files, call=api):
+    """{file: raw URL} for every image uploaded; {} (reason on stderr) when it can't or shouldn't."""
+    files = [str(f) for f in files if Path(f).suffix.lower() in IMAGES and Path(f).is_file()]
+    owner, project = origin()
+    if not files:
+        return {}
+    if not owner:
+        say("origin isn't a GitHub repository: screenshots stay local")
+        return {}
+    try:
+        source = call("GET", f"/repos/{owner}/{project}")
+        if not source or source.get("private", True):
+            say(f"{owner}/{project} is not a public repository: screenshots stay local, "
+                f"so they aren't published while the code is not")
+            return {}
+        login = call("GET", "/user")["login"]
+        store = call("GET", f"/repos/{login}/{STORE}") or call(
+            "POST", "/user/repos",
+            {"name": STORE, "description": "Screenshots for PR comments", "private": False, "auto_init": True})
+        branch = store.get("default_branch", "main")
+    except Exception as e:
+        say(f"can't reach GitHub ({e}): screenshots stay local")
+        return {}
+    urls = {}
+    for local in files:
+        data = Path(local).read_bytes()
+        dest = f"{project}/{run_id}/{Path(local).name}"
+        api_path = f"/repos/{login}/{STORE}/contents/{urllib.parse.quote(dest)}"
+        try:
+            existing = call("GET", api_path)
+            same = existing and existing.get("content", "").replace("\n", "") == base64.b64encode(data).decode()
+            if not same:
+                body = {"message": f"Add {dest}", "content": base64.b64encode(data).decode()}
+                if existing and existing.get("sha"):
+                    body["sha"] = existing["sha"]
+                call("PUT", api_path, body)
+            urls[local] = f"https://raw.githubusercontent.com/{login}/{STORE}/{branch}/{urllib.parse.quote(dest)}"
+        except Exception as e:
+            say(f"upload of {Path(local).name} failed ({e})")
+    return urls
+
+
+def markdown(run_id, files, call=api):
+    """The section a comment shows: images where they uploaded, names where they didn't.
+    Names are relative to the repository, never an absolute path of this machine."""
+    files = [str(f) for f in files if Path(f).is_file()]
+    if not files:
+        return ""
+    urls = upload(run_id, files, call)
+    out = ["#### Screenshots", ""]
+    for local in files:
+        name = Path(local).name
+        if local in urls:
+            out.append(f"![{name}]({urls[local]})")
+        else:
+            rel = os.path.relpath(local).replace("\\", "/")
+            out.append(f"- `{name}` (not uploaded; in the run's files: `{name if rel.startswith('..') else rel}`)")
+    return "\n".join(out) + "\n"
+
+
+def main(argv):
+    as_markdown = bool(argv) and argv[0] == "--markdown"
+    args = argv[1:] if as_markdown else argv
+    if len(args) < 2:
+        print(__doc__.strip(), file=sys.stderr)
+        return 2
+    run_id, files = args[0], args[1:]
+    if as_markdown:
+        print(markdown(run_id, files))
+    else:
+        print(json.dumps(upload(run_id, files), ensure_ascii=False))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

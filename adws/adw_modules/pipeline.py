@@ -20,7 +20,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Dict, Optional, Tuple
 
-from adw_modules import gh, roles, shots, worktrees
+from adw_modules import gh, roles, worktrees
 from adw_modules.agent import run_role
 from adw_modules.git_ops import is_clean, is_pushed
 from adw_modules.logs import new_adw_id
@@ -309,21 +309,18 @@ def hand_over(state: ADWState, logger) -> None:
 
 
 def screenshots(state: ADWState, rd: Path) -> list:
+    """The hand-over's "#### Screenshots" section, from the factory's uploader
+    (`factory/bin/shots`), which the L2 driver uses too. Evidence, not a reason to
+    fail the hand-over: a problem leaves the section out."""
     found = sorted(glob.glob(str(rd / "shots" / "*.png")))
     if not found:
         return []
-    try:
-        import logging
-        urls = shots.upload(found, state.get("adw_id"), gh.repo().split("/")[0],
-                            logging.getLogger(f"adw.{state.get('adw_id')}"))
-    except Exception as e:  # screenshots are evidence, not a reason to fail the hand-over
-        print(f"screenshot upload failed: {e}", file=sys.stderr)
-        urls = {}
-    out = ["#### Screenshots", ""]
-    for local in found:
-        url, name = urls.get(local, local), Path(local).name
-        out.append(f"![{name}]({url})" if url.startswith("http") else f"- `{name}` (local: `{local}`)")
-    return out + [""]
+    res = subprocess.run([sys.executable, "-X", "utf8", str(roles.REPO / "factory" / "bin" / "shots"),
+                          "--markdown", state.get("adw_id"), *found],
+                         cwd=str(roles.REPO), capture_output=True, text=True, encoding="utf-8")
+    if res.stderr.strip():
+        print(res.stderr.strip(), file=sys.stderr)
+    return [res.stdout.strip(), ""] if res.returncode == 0 and res.stdout.strip() else []
 
 
 # ---- entry points the phase scripts call -----------------------------------------------

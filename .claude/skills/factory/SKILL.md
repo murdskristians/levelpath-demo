@@ -156,8 +156,9 @@ finished:
 
 **approve.** When the approver returns, run
 `factory/bin/job advance <id> needs-human`, whether `decision.md` says `READY`
-or `ESCALATE`. It marks the PR ready, posts the decision on it and labels the
-issue `factory:needs-human`. Never merge a PR, and never run `gh pr merge`:
+or `ESCALATE`. It marks the PR ready, posts the decision on it (with the
+verifier's screenshots shown inline, uploaded by `factory/bin/shots`) and labels
+the issue `factory:needs-human`. Never merge a PR, and never run `gh pr merge`:
 the person reviews the PR and merges it.
 
 A job is finished for this run when it reaches `merged`, `rejected`,
