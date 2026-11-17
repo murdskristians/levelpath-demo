@@ -13,6 +13,17 @@ main {
   overflow-wrap: anywhere;
 }
 
+footer {
+  box-sizing: border-box;
+  max-width: 40rem;
+  margin: 0 auto;
+  padding: 1rem;
+  text-align: center;
+  font-size: 0.875rem;
+  color: #4b5563;
+  overflow-wrap: anywhere;
+}
+
 .empty-state {
   padding: 2rem 1rem;
   border: 2px dashed #6b7280;
