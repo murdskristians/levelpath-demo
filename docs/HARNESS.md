@@ -70,25 +70,21 @@ A gate failure or a CHANGES verdict starts the next build round, up to three, th
 
 ## Where each part came from
 
-| Part                                                         | Source                                                          | What changed                                                                                               |
-| ------------------------------------------------------------ | --------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| `.claude/skills/factory/`, `factory/bin/*`, `dashboard.html` | factory fork `82b82ca` (ZazenCodes, GPLv3)                      | Windows port, never merges, shared roles, risk-routed models, `gate --run` for every driver                |
-| `factory/tests/run_test.py`                                  | written for the fork                                            | 35 checks: Windows, locks, gate, hook, cost, no-merge                                                      |
-| `intake`, `builder`, `approver`                              | factory fork                                                    | `TYPE:` from git-adw `classify_issue`; this stack; approver only recommends                                |
-| `planner`                                                    | factory `spec-writer` + git-adw plan formats                    | writes `spec.md` and `plan.md`; checks library versions first                                              |
-| `verifier`                                                   | git-adw `test` + tac `playwright-validator` + factory UX method | runs the app, exercises the criteria, screenshots, reports only                                            |
-| `reviewer-bugs`                                              | factory `reviewer-code` + tac `review-agent`                    | Important/Nit (`REVIEW.md`)                                                                                |
-| `reviewer-spec`                                              | git-adw `review` command                                        | traceability of every criterion to the diff                                                                |
-| `reviewer-security`                                          | factory `reviewer-security`                                     | tenant isolation and RLS, PII, prompt injection                                                            |
-| `scout`, `meta-agent`, `skills/meta-prompt`                  | tac-combined `f739cbb`                                          | scout writes `scout.md`; meta-agent on sonnet, not proactive                                               |
-| `adws/`                                                      | git-adw `6f7049e`                                               | roles via `claude -p --agent`, file contracts instead of prose parsing, the factory's gate, caps, no merge |
-| `adws/adw_triggers/trigger_cron.py`                          | git-adw                                                         | owner-only `adw` / `adw patch` comments, no LLM classification, opt-in                                     |
-| `.claude/hooks/guard.py`                                     | git-adw `pre_tool_use.py`                                       | actually blocks; secrets, merges, migrations, test lock, protected paths                                   |
-| `.claude/hooks/format_on_edit.py`                            | new                                                             | Prettier and ESLint on the edited file only                                                                |
-| `/intent /spec /plan /verify /review /try`                   | new; `/try` from git-adw `in_loop_review`                       | the L1 driver over the same roles                                                                          |
-| `CLAUDE.md`, `REVIEW.md`, `docs/templates/`, skills          | new (rules merged from all three)                               | -                                                                                                          |
+Code from the public ZazenCodes factory (GPLv3) was adapted here. From my two private course harnesses, git-adw and tac-combined, only **ideas** came over: every file listed as an idea was written for this repository.
 
-The original files are in commit `bc3b798` (the unmodified import). Credits and licences are in [CREDITS.md](../CREDITS.md).
+| Part                                                         | Source                                                   | What changed                                                                                                            |
+| ------------------------------------------------------------ | -------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `.claude/skills/factory/`, `factory/bin/*`, `dashboard.html` | factory fork `82b82ca` (ZazenCodes, GPLv3)               | Windows port, never merges, shared roles, risk-routed models, `gate --run` for every driver, the control room (`serve`) |
+| `factory/tests/run_test.py`                                  | written for the fork                                     | 35 checks: Windows, locks, gate, hook, cost, no-merge                                                                   |
+| `intake`, `builder`, `approver`, `reviewer-security`         | factory fork                                             | `TYPE:` (feature, bug, chore), this stack, tenant isolation; the approver only recommends                               |
+| `planner`                                                    | factory `spec-writer`, plus git-adw's typed plans (idea) | writes `spec.md` and `plan.md`; checks library versions first                                                           |
+| `verifier`, `reviewer-bugs`, `reviewer-spec`, `scout`        | written here, from ideas in all three                    | run the app, find bugs, trace the spec, scout the code; findings Important/Nit (`REVIEW.md`)                            |
+| `adws/`                                                      | written here, from git-adw's ADW design (idea: PITER)    | roles via `claude -p --agent`, file contracts, the factory's gate, caps, no merge, owner-only trigger                   |
+| `.claude/hooks/guard.py`, `format_on_edit.py`                | written here                                             | blocks secrets, merges, migrations, test edits in bug runs, protected paths; formats the edited file                    |
+| `/intent /spec /plan /verify /review /try`                   | written here                                             | the L1 driver over the same roles                                                                                       |
+| `CLAUDE.md`, `REVIEW.md`, `docs/templates/`, skills          | written here                                             | -                                                                                                                       |
+
+The changelog records what changed and why. Credits and licences are in [CREDITS.md](../CREDITS.md).
 
 ## Try it
 

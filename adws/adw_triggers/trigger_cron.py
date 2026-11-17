@@ -1,7 +1,7 @@
 #!/usr/bin/env -S uv run
 # /// script
 # requires-python = ">=3.11"
-# dependencies = ["schedule", "python-dotenv", "pydantic"]
+# dependencies = ["schedule", "python-dotenv"]
 # ///
 
 """The T in PITER: start ADW runs from GitHub issue comments. Opt-in.
@@ -36,18 +36,16 @@ from dotenv import load_dotenv
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from adw_modules.github import (extract_repo_path, fetch_issue_comments,  # noqa: E402
-                                fetch_open_issues, get_repo_url, operator_login)
+from adw_modules import gh  # noqa: E402
 from adw_modules.pipeline import latest_run  # noqa: E402
-from adw_modules.roles import MARKER  # noqa: E402
 from adw_modules.state import ADWState  # noqa: E402
 
 load_dotenv()
 
 POLL_SECONDS = max(60, int(os.getenv("ADW_POLL_SECONDS", "60")))
 ADWS = Path(__file__).resolve().parents[1]
-REPO_PATH = extract_repo_path(get_repo_url())
-OPERATOR = operator_login()
+REPO_PATH = gh.repo()
+OPERATOR = gh.operator()
 
 seen: Dict[int, Optional[str]] = {}  # issue → id of the last comment looked at
 shutdown = False
@@ -61,7 +59,7 @@ def on_signal(signum, _frame):
 
 def command_for(issue_number: int) -> Optional[list]:
     """The workflow command a new operator comment asks for, or None."""
-    comments = fetch_issue_comments(REPO_PATH, issue_number)
+    comments = gh.comments(issue_number)
     if not comments:
         return None
     latest = comments[-1]
@@ -72,7 +70,7 @@ def command_for(issue_number: int) -> Optional[list]:
     if first_time:
         return None  # existing comments are history, not commands
     body = (latest.get("body") or "").strip()
-    if MARKER in body or latest.get("author", {}).get("login") != OPERATOR:
+    if gh.MARKER in body or latest.get("author", {}).get("login") != OPERATOR:
         return None
     first, _, rest = body.partition("\n")
     words = first.strip().lower().split()
@@ -91,16 +89,16 @@ def command_for(issue_number: int) -> Optional[list]:
 
 
 def poll():
-    for issue in fetch_open_issues(REPO_PATH):
+    for number in gh.open_issues():
         if shutdown:
             return
-        cmd = command_for(issue.number)
+        cmd = command_for(number)
         if not cmd:
             continue
-        print(f"INFO: #{issue.number}: running {' '.join(cmd[:3])}")
+        print(f"INFO: #{number}: running {' '.join(cmd[:3])}")
         # Not captured: the run's progress streams live into this terminal
         result = subprocess.run(["uv", "run", str(ADWS / cmd[0]), *cmd[1:]], cwd=str(ADWS.parent))
-        print(f"INFO: #{issue.number}: {cmd[0]} exited {result.returncode}")
+        print(f"INFO: #{number}: {cmd[0]} exited {result.returncode}")
 
 
 def main():

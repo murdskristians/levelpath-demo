@@ -1,7 +1,7 @@
 #!/usr/bin/env -S uv run
 # /// script
 # requires-python = ">=3.11"
-# dependencies = ["python-dotenv", "pydantic"]
+# dependencies = ["python-dotenv"]
 # ///
 
 """ADW build (isolated): one builder round.
@@ -23,7 +23,7 @@ load_dotenv()
 
 from adw_modules import pipeline  # noqa: E402
 from adw_modules.state import ADWState  # noqa: E402
-from adw_modules.utils import setup_logger  # noqa: E402
+from adw_modules.logs import setup_logger  # noqa: E402
 
 SCRIPT = "adw_build_iso"
 

@@ -11,8 +11,8 @@ This repo's agent harness is built from three earlier harnesses. What came from 
 
 ## Tactical Agentic Coding and multi-agent orchestration, by IndyDevDan
 
-- The AI Developer Workflow (ADW) design behind `adws/` (via git-adw, Chris's private course repository).
-- The orchestrator's agent templates and the `meta-prompt` skill (via tac-combined, a private fork of multi-agent-orchestration).
+- The AI Developer Workflow (ADW) design behind `adws/` (PITER: issue as prompt, trigger, isolated worktree, review), from git-adw, a private course repository. The code in `adws/` is written for this repository.
+- The orchestrator pattern (an agent that creates, commands and watches other agents) that inspired the control room and the scout role, from tac-combined, a private fork of multi-agent-orchestration. No code from it is in this repository.
 - All credit for the original architecture belongs to IndyDevDan.
 
 ## This repo

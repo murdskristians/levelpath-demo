@@ -58,7 +58,7 @@ I stop and wait at three points so you can commit.
 
 ## Step 2: Import as-is → Stop A
 
-**Done 2026-11-17**: commit `bc3b798` (76 files from the three sources, unmodified).
+**Done 2026-11-17.** Later the same day, every file from the two private sources (git-adw, tac-combined) was removed from the public history and replaced by code written here; see `docs/HARNESS_CHANGELOG.md`. The import commit now holds only the public factory files.
 
 Copied unmodified, each source pinned to a commit:
 

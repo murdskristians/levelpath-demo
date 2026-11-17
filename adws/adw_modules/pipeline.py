@@ -20,15 +20,11 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Dict, Optional, Tuple
 
-from adw_modules import roles
+from adw_modules import gh, roles, shots, worktrees
 from adw_modules.agent import run_role
 from adw_modules.git_ops import is_clean, is_pushed
-from adw_modules.github import (add_label, extract_repo_path, fetch_issue, get_repo_url,
-                                make_issue_comment, make_pr_comment, mark_pr_ready,
-                                operator_login, pr_for_branch)
+from adw_modules.logs import new_adw_id
 from adw_modules.state import ADWState
-from adw_modules.utils import make_adw_id
-from adw_modules.worktree_ops import create_worktree, find_next_available_ports
 
 LABELS = roles.CONFIG["labels"]
 MAX_ROUNDS = roles.CONFIG["max_rounds"]
@@ -43,7 +39,7 @@ class Stop(Exception):
 
 def say(state: ADWState, step: str, message: str) -> None:
     """Post a progress comment on the issue, git-adw style: [ADW-BOT] <adw_id>_<step>: ..."""
-    make_issue_comment(state.get("issue_number"), f"{roles.MARKER} {state.get('adw_id')}_{step}: {message}")
+    gh.comment_issue(state.get("issue_number"), f"{gh.MARKER} {state.get('adw_id')}_{step}: {message}")
 
 
 def folder(state: ADWState) -> Path:
@@ -77,7 +73,7 @@ def role(state: ADWState, logger, name: str, prompt: str, model: Optional[str] =
 
 def start(issue_number: str, adw_id: Optional[str], script: str, logger_factory) -> Tuple[ADWState, object]:
     """Create or load the run's state and job folder."""
-    adw_id = adw_id or make_adw_id()
+    adw_id = adw_id or new_adw_id()
     state = ADWState.load(adw_id) or ADWState(adw_id)
     if state.get("issue_number") and str(state.get("issue_number")) != str(issue_number):
         raise Stop(f"ADW run {adw_id} belongs to issue #{state.get('issue_number')}, not #{issue_number}")
@@ -91,15 +87,15 @@ def start(issue_number: str, adw_id: Optional[str], script: str, logger_factory)
 def plan(state: ADWState, logger) -> None:
     """intake → route → worktree → [scout] → planner. Raises Stop when the run waits."""
     adw_id, number = state.get("adw_id"), state.get("issue_number")
-    issue = fetch_issue(number, extract_repo_path(get_repo_url()))
+    issue = gh.issue(number)
     d = folder(state)
     if (d / "intake.md").exists():  # a NEEDS-INFO answered: keep the old question for intake
         k = len(list(d.glob("intake-*.md"))) + 1
         (d / "intake.md").rename(d / f"intake-{k}.md")
-    (d / "issue.md").write_text(roles.write_issue_md(issue, operator_login()), encoding="utf-8")
-    branch = state.get("branch_name") or f"adw/{adw_id}-{roles.slugify(issue.title)}"
+    (d / "issue.md").write_text(roles.write_issue_md(issue, gh.operator()), encoding="utf-8")
+    branch = state.get("branch_name") or f"adw/{adw_id}-{roles.slugify(issue['title'])}"
     worktree = state.get("worktree_path") or str(roles.REPO / "trees" / adw_id)
-    state.update(title=issue.title, branch_name=branch, worktree_path=worktree, stage="intake")
+    state.update(title=issue["title"], branch_name=branch, worktree_path=worktree, stage="intake")
     state.save("intake")
     say(state, "ops", f"Starting ADW run `{adw_id}` on branch `{branch}`.")
 
@@ -115,7 +111,7 @@ def plan(state: ADWState, logger) -> None:
     if decision == "NEEDS-INFO":
         state.update(stage="needs-info")
         state.save("needs-info")
-        add_label(number, LABELS["needs_info"])
+        gh.add_label(number, LABELS["needs_info"])
         raise Stop("intake needs information from the author; comment `adw` again once it is answered")
     if decision == "REJECT":
         state.update(stage="rejected")
@@ -124,11 +120,11 @@ def plan(state: ADWState, logger) -> None:
 
     reviewers, model = roles.route(state.get("risk"), surfaces)
     state.update(agents={"reviewers": reviewers, "planner": model, "builder": model})
-    if not Path(worktree).exists():
-        path, err = create_worktree(adw_id, branch, logger)
-        if err:
-            raise Stop(f"couldn't create the worktree: {err}")
-    api, web = find_next_available_ports(adw_id)
+    try:
+        worktrees.create(adw_id, branch, roles.BASE)
+        api, web = worktrees.ports(adw_id)
+    except RuntimeError as e:
+        raise Stop(str(e))
     state.update(backend_port=api, frontend_port=web, stage="spec", round_limit=MAX_ROUNDS)
     state.save("route")
     logger.info(f"routed: reviewers {reviewers}; planner and builder {model}; ports API {api}, web {web}")
@@ -183,7 +179,7 @@ def check_ready(state: ADWState, status: Optional[str]) -> Optional[str]:
         return "the worktree has uncommitted changes"
     if not is_pushed(wt, branch):
         return f"{branch} isn't pushed to origin"
-    pr = pr_for_branch(branch)
+    pr = gh.pr_for_branch(branch)
     if not pr:
         return f"there is no open PR from {branch}"
     state.update(pr_number=pr)
@@ -301,31 +297,30 @@ def hand_over(state: ADWState, logger) -> None:
     body = "\n".join(lines)
     pr = state.get("pr_number")
     if pr:
-        mark_pr_ready(pr)
-        make_pr_comment(pr, body)
+        gh.pr_ready(pr)
+        gh.comment_pr(pr, body)
         say(state, "ops", f"Done: PR #{pr} is ready for your review. You merge it.")
     else:
         say(state, "ops", "no PR to hand over.\n\n" + body)  # the body's heading on its own line
-    add_label(state.get("issue_number"), LABELS["needs_human"])
+    gh.add_label(state.get("issue_number"), LABELS["needs_human"])
     state.update(stage="needs-human")
     state.save("needs-human")
     logger.info(f"needs-human: {title}")
 
 
 def screenshots(state: ADWState, rd: Path) -> list:
-    shots = sorted(glob.glob(str(rd / "shots" / "*.png")))
-    if not shots:
+    found = sorted(glob.glob(str(rd / "shots" / "*.png")))
+    if not found:
         return []
     try:
-        from adw_modules.github_uploader import GitHubUploader
         import logging
-        urls = GitHubUploader(logging.getLogger(f"adw_{state.get('adw_id')}")).upload_screenshots(
-            shots, state.get("adw_id"))
+        urls = shots.upload(found, state.get("adw_id"), gh.repo().split("/")[0],
+                            logging.getLogger(f"adw.{state.get('adw_id')}"))
     except Exception as e:  # screenshots are evidence, not a reason to fail the hand-over
         print(f"screenshot upload failed: {e}", file=sys.stderr)
-        urls = {s: s for s in shots}
+        urls = {}
     out = ["#### Screenshots", ""]
-    for local in shots:
+    for local in found:
         url, name = urls.get(local, local), Path(local).name
         out.append(f"![{name}]({url})" if url.startswith("http") else f"- `{name}` (local: `{local}`)")
     return out + [""]
@@ -343,7 +338,7 @@ def patch(state: ADWState, logger, feedback: str) -> None:
     """Your feedback on a run that is waiting for you: another set of rounds."""
     d = folder(state)
     k = len(list(d.glob("feedback-*.md"))) + 1
-    (d / f"feedback-{k}.md").write_text(f"# Feedback {k}\n\nFrom @{operator_login()} on the issue.\n\n"
+    (d / f"feedback-{k}.md").write_text(f"# Feedback {k}\n\nFrom @{gh.operator()} on the issue.\n\n"
                                         f"{feedback.strip()}\n", encoding="utf-8")
     state.update(round_limit=state.get("round", 0) + MAX_ROUNDS)
     state.save("patch")
