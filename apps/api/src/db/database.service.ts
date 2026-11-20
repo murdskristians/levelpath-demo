@@ -11,7 +11,7 @@ import type { AuthUser } from '../auth/auth-user.js';
 import { DB_CONFIG, type DbConfig } from './db-config.js';
 import type { Database } from './schema.js';
 import { isUuid } from './uuid.js';
-import type { UserRole } from './values.js';
+import type { UserRole } from '@levelpath/shared';
 
 /** What a service gets inside `withTenant`: a transaction in which only one tenant's rows exist. */
 export type TenantTransaction = Transaction<Database>;

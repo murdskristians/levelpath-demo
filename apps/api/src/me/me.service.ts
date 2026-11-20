@@ -1,7 +1,7 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import type { AuthUser } from '../auth/auth-user.js';
 import { DatabaseService } from '../db/database.service.js';
-import type { UserRole } from '../db/values.js';
+import type { UserRole } from '@levelpath/shared';
 
 export interface MeResponse {
   user: { id: string; name: string; role: UserRole };

@@ -1,5 +1,5 @@
 import type { ColumnType, Generated } from 'kysely';
-import type { ApprovalDecision, PurchaseRequestStatus, UserRole } from './values.js';
+import type { ApprovalDecision, PurchaseRequestStatus, UserRole } from '@levelpath/shared';
 
 // Hand-written table types for Kysely, matching db/migrations/. A column Postgres
 // fills in (an id, a default, a timestamp) is Generated: optional on insert.

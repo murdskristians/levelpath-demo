@@ -140,3 +140,9 @@ One entry per new concept: what it is, why it matters, where it lives in this re
 - **What:** Vitest's global setup creates `lp_<random>` on the shared Postgres server, migrates and seeds it as the owner, hands its name to the tests (`provide` / `inject`), and drops it when the run ends. The tests then connect as the app role.
 - **Why it matters:** Factory and ADW runs build in parallel worktrees. With one shared database their test rows would collide; with one database each they never meet, and nothing is left behind. One server for all: a Postgres container per worktree would fight over port 5432.
 - **Where:** [global-setup.mjs](../apps/api/test/global-setup.mjs), [helpers.ts](../apps/api/test/helpers.ts), [vitest.config.ts](../apps/api/vitest.config.ts).
+
+## Contract first, then build in parallel (Phase 3)
+
+- **What:** Before the API and the UI are built, their agreement is written down and merged: the routes, who may call them, the errors, and the request and response shapes as Zod schemas in `packages/shared`. The API validates every body with those schemas; the web app validates its forms and reads responses with the same ones.
+- **Why it matters:** Two jobs can then run at the same time in separate worktrees, an API job and a UI job, without waiting for each other or guessing. A shape that changes breaks the build of both, not a demo. It is also the review point that matters most: the error rules (404 for what you may not see, 403 only when it reveals nothing) were decided once, by a person.
+- **Where:** [purchase-requests-contract.md](specs/purchase-requests-contract.md), [packages/shared/src/](../packages/shared/src/).
