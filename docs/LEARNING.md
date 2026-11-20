@@ -92,3 +92,51 @@ One entry per new concept: what it is, why it matters, where it lives in this re
 - **What:** ESM has no `__dirname`. Use `new URL('../package.json', import.meta.url)` to find a file relative to the current module.
 - **Why it matters:** `/version` reads `apps/api/package.json` at runtime. The same path works from `src/` and from the built `dist/`, because both sit directly under `apps/api`.
 - **Where:** [version.service.ts](../apps/api/src/version.service.ts).
+
+## Kysely: a typed SQL builder (Phase 2)
+
+- **What:** Kysely is a library that lets you write SQL as TypeScript calls (`db.selectFrom('suppliers').where('name', '=', x).selectAll()`), and checks the table and column names against types you give it. It is not an ORM: no entities, no hidden queries, no generated migrations. What you write is the SQL that runs.
+- **Why it matters:** RLS is only as safe as the connection it runs on. With Kysely, every database call in a request goes through one explicit transaction (`db.transaction().execute(trx => …)`), and the first line of it sets the tenant (`SET LOCAL app.tenant_id`). Nothing can quietly use another connection, which is the point of the design. The policies and migrations stay plain `.sql` files we can read aloud in the interview.
+- **Where:** [database.service.ts](../apps/api/src/db/database.service.ts) (the only file that holds it) and the table types in [schema.ts](../apps/api/src/db/schema.ts). Chosen over Drizzle, TypeORM and Prisma; see the intent's decision.
+
+## Row-level security, enabled and forced (Phase 2)
+
+- **What:** A policy on a table is a condition Postgres adds to every query on it, like an invisible `WHERE`. `USING` filters the rows you can read, update or delete; `WITH CHECK` refuses a row you write unless it passes. Ours: `tenant_id = NULLIF(current_setting('app.tenant_id', true), '')::uuid`. `ENABLE` turns the policies on, and `FORCE` applies them to the table's owner too.
+- **Why it matters:** Isolation then doesn't depend on every query remembering a `WHERE tenant_id = …`: a forgotten filter returns nothing, not someone else's data. With no tenant set, the setting is NULL (or `''`, which `NULLIF` turns into NULL), and NULL matches no row, so it fails closed.
+- **Where:** every file in [db/migrations/](../db/migrations/); the tests in [rls-isolation.spec.ts](../apps/api/src/db/rls-isolation.spec.ts).
+
+## The app logs in as a role that owns nothing (Phase 2)
+
+- **What:** Migrations run as the owner (`levelpath_owner`, the image's superuser). The API logs in as `levelpath_app`: no superuser, no `BYPASSRLS`, owns no table, and holds only the grants it needs (read-only on `tenants` and `users`).
+- **Why it matters:** A superuser and a `BYPASSRLS` role skip RLS entirely, even with `FORCE`. If the API connected as the owner, every policy would be decoration, and nothing would look wrong. So it is checked, not trusted. The API refuses to start on a login that is a superuser, has `BYPASSRLS` or `REPLICATION`, is a member of another role (it could `SET ROLE` to the owner), owns tables or schemas, may create schemas, objects in a schema or temporary tables, or may `TRUNCATE` a table (RLS doesn't cover `TRUNCATE`). `pnpm db:migrate` refuses an existing `APP_DB_USER` with any attribute or membership the role it creates doesn't have. A test asserts the role's rights from the catalog. The role also can't create temporary tables: one named like a real table would shadow it on that pooled connection, because Postgres searches temporary tables first.
+- **Where:** `ensureAppRole()` in [db-lib.mjs](../apps/api/db-tools/db-lib.mjs); the startup check `onModuleInit` in [database.service.ts](../apps/api/src/db/database.service.ts); [db-config.ts](../apps/api/src/db/db-config.ts) never reads the owner's login; [migrations.spec.ts](../apps/api/src/db/migrations.spec.ts).
+
+## SET LOCAL and the connection-pool leak (Phase 2)
+
+- **What:** A pool keeps a few connections open and lends them to requests in turn. A plain `SET app.tenant_id` lasts for the connection's whole session, so the next request on that connection would run as the previous tenant. `set_config('app.tenant_id', $1, true)` is the `LOCAL` form: it ends with the transaction, on commit or rollback.
+- **Why it matters:** This is the classic way RLS setups leak. `withTenant` opens a transaction, sets the tenant first, and runs the request's queries inside it. The connection always goes back to the pool with no tenant. A test with a pool of one connection proves it, and it fails if the `true` becomes `false`: we flipped it on purpose and saw _"expected 2 to be 0"_, the next query seeing Acme's two suppliers.
+- **Where:** `withTenant` in [database.service.ts](../apps/api/src/db/database.service.ts); [with-tenant.spec.ts](../apps/api/src/db/with-tenant.spec.ts).
+
+## Composite foreign keys: RLS doesn't check references (Phase 2)
+
+- **What:** Foreign-key checks run without RLS. A plain `supplier_id REFERENCES suppliers (id)` would accept another tenant's supplier. So the keys are composite: `(tenant_id, supplier_id) REFERENCES suppliers (tenant_id, id)`, against a `UNIQUE (tenant_id, id)` on the parent, and the referenced row must have the same tenant.
+- **Why it matters:** Without it, a crafted id links tenant A's request to tenant B's data. A NULL in a composite key skips the check (`MATCH SIMPLE`), which is safe: a NULL points at nothing, and `tenant_id` is `NOT NULL` everywhere.
+- **Where:** [0003_purchase_requests.sql](../db/migrations/0003_purchase_requests.sql), [0004_approvals.sql](../db/migrations/0004_approvals.sql); "cross-tenant references" in [migrations.spec.ts](../apps/api/src/db/migrations.spec.ts).
+
+## A SECURITY DEFINER lookup, and its search_path (Phase 2)
+
+- **What:** A `SECURITY DEFINER` function runs with its owner's rights, not the caller's. `app_resolve_user(id)` returns one user's id, tenant and role, and it is the only function of ours the app role may call. `SET search_path = pg_catalog, pg_temp` and schema-qualified names stop a caller from slipping in its own `users` table.
+- **Why it matters:** The login has to find a user's tenant before any tenant is set, and RLS hides every user until then. Turning RLS off on `users`, or adding a policy that a second setting opens, would widen what the app can read. A one-id-in, one-row-out function is the narrowest exception, and tests pin it down: no name, nothing for an unknown id, not callable by `PUBLIC`. `resolveUser` calls it with `${userId}::uuid`: an untyped argument would also match a look-alike `app_resolve_user(text)`, and Postgres would pick that one (a test plants one and fails without the cast).
+- **Where:** [0001_tenants_and_users.sql](../db/migrations/0001_tenants_and_users.sql); `resolveUser` in [database.service.ts](../apps/api/src/db/database.service.ts); [user-lookup.spec.ts](../apps/api/src/db/user-lookup.spec.ts).
+
+## NestJS guards, and the X-User-Id stub (Phase 2)
+
+- **What:** A guard is a class Nest runs before a route handler; it lets the request through or throws. `AuthGuard` is registered as `APP_GUARD`, so it runs for every route: it reads `X-User-Id`, resolves it to the user's id, tenant and role, and puts that on the request for `@CurrentUser()`. Routes marked `@Public()` (`/health`, `/version`) skip it.
+- **Why it matters:** Protected by default: a new route is closed until someone opens it. A missing, malformed or unknown id gets the same 401, so responses don't reveal which users exist. **It is not authentication:** anyone can send any id. It stands in for a real login (a signed token) so that the demo can show the tenant flowing from the request into `withTenant`, never from the body or query.
+- **Where:** [apps/api/src/auth/](../apps/api/src/auth/); [auth.guard.spec.ts](../apps/api/src/auth/auth.guard.spec.ts) and [me.controller.spec.ts](../apps/api/src/me/me.controller.spec.ts) over real HTTP.
+
+## A database per test run (Phase 2)
+
+- **What:** Vitest's global setup creates `lp_<random>` on the shared Postgres server, migrates and seeds it as the owner, hands its name to the tests (`provide` / `inject`), and drops it when the run ends. The tests then connect as the app role.
+- **Why it matters:** Factory and ADW runs build in parallel worktrees. With one shared database their test rows would collide; with one database each they never meet, and nothing is left behind. One server for all: a Postgres container per worktree would fight over port 5432.
+- **Where:** [global-setup.mjs](../apps/api/test/global-setup.mjs), [helpers.ts](../apps/api/test/helpers.ts), [vitest.config.ts](../apps/api/vitest.config.ts).

@@ -12,6 +12,10 @@ edit `job.json`: the scripts in `factory/bin/` change state and refuse illegal
 moves. When a script refuses, its message says why. Fix the cause or stop and
 tell the user; never work around it.
 
+Postgres must be up before a run (`pnpm db:up`): the gate's API tests create their
+own database on it. If a gate fails with "Run `pnpm db:up` first", tell the user;
+it is not the builder's bug.
+
 ```
 /factory run          drain the queue: every open `factory` issue, `concurrency` at a time; also resumes
 /factory run <n>      run one issue now

@@ -30,10 +30,15 @@ Needs Node 24, pnpm 10 and Docker.
 ```bash
 pnpm install
 pnpm dev      # Postgres (healthy), the API on :3000, the web app on :5173
+pnpm db:migrate && pnpm db:seed   # the tables (RLS forced on each) and two demo companies
 pnpm build    # all three must exit 0; CI and the harness's gate run the same
 pnpm lint
-pnpm test
+pnpm test     # needs Postgres up (pnpm db:up): each run uses its own throwaway database
 ```
+
+Ask the API who you are: `curl -H "X-User-Id: a0000000-0000-4000-8000-000000000101" localhost:3000/me` returns Alice, requester at Acme Corp.
+
+> **`X-User-Id` is a development stub, not authentication.** Anyone can send any seeded user's id. It stands in for a real login so the demo can show what matters here: every query runs in a transaction scoped to the caller's company, and Postgres row-level security refuses the rest. Real authentication is out of scope.
 
 ## Use the harness
 
