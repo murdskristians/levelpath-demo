@@ -48,6 +48,11 @@ checkout; your files go there.
   it as a criterion. Do ask for new tests.
 - Never require a change to a file listed in `protected_paths` in
   `factory/config.json`.
+- Before you finish, read every criterion as the builder will, against the
+  requirements you wrote: grants, policies, unique keys, defaults. A criterion
+  no correct build can pass makes the builder change a test or escalate.
+  (Phase 2: a test required the app to insert a `tenants` row, under a policy
+  that only admits the tenant's own row, which already existed.)
 
 ## Write plan.md: how
 

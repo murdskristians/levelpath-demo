@@ -20,7 +20,7 @@ Every change from the originals is in [HARNESS_CHANGELOG.md](HARNESS_CHANGELOG.m
  roles      intake · scout · planner · builder · verifier ·
             reviewer-bugs · reviewer-spec · reviewer-security · approver
  knowledge  CLAUDE.md · skills · REVIEW.md · docs/templates
- gate       factory/checks.sh   pnpm install · build · lint · test   (+ RLS suite, Phase 2)
+ gate       factory/checks.sh   pnpm install · build · lint · test   (the RLS suite is in pnpm test; needs pnpm db:up)
  guards     .claude/hooks/guard.py   (blocks)  ·  format_on_edit.py
  end        PR ready + decision.md + label factory:needs-human  →  only Chris merges
 ```

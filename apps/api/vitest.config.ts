@@ -5,5 +5,11 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig({
   test: {
     include: ['src/**/*.spec.ts'],
+    // Creates this run's own database (lp_<random>), migrates and seeds it, and drops it at
+    // the end. The tests need Postgres up: `pnpm db:up`.
+    globalSetup: ['./test/global-setup.mjs'],
+    // The spec files share that one database, so they run one after another.
+    fileParallelism: false,
+    testTimeout: 15_000,
   },
 });

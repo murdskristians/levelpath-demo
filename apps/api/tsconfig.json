@@ -3,11 +3,12 @@
   "compilerOptions": {
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
+    "rootDir": ".",
     "outDir": "dist",
-    "rootDir": "src",
     "experimentalDecorators": true,
     "emitDecoratorMetadata": true,
     "types": ["node"]
   },
-  "include": ["src"]
+  // The editor checks the tests and their helpers too; the build compiles src only (tsconfig.build.json).
+  "include": ["src", "test"]
 }
