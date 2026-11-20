@@ -111,3 +111,33 @@ export async function startApp(): Promise<{ app: INestApplication; url: string }
   const { port } = app.getHttpServer().address() as AddressInfo;
   return { app, url: `http://127.0.0.1:${port}` };
 }
+
+const SEEDED_REQUESTS = [...SEED.acme.purchaseRequests, ...SEED.globex.purchaseRequests];
+const SEEDED_APPROVALS = [...SEED.acme.approvals, ...SEED.globex.approvals];
+
+/**
+ * Deletes every purchase request and approval a test created (approvals first: they
+ * reference the requests), and leaves the seeded rows alone. Every spec file that
+ * creates rows calls it in afterAll, so the next file sees the seed exactly.
+ */
+export async function deleteRowsTestsCreated(owner: pg.Client): Promise<void> {
+  await owner.query('delete from approvals where not (id = any($1::uuid[]))', [SEEDED_APPROVALS]);
+  await owner.query('delete from purchase_requests where not (id = any($1::uuid[]))', [
+    SEEDED_REQUESTS,
+  ]);
+}
+
+/** The seeded requests and every approval on them, as the owner sees them: compare before and after. */
+export async function seededRequestsSnapshot(owner: pg.Client): Promise<unknown> {
+  const requests = await owner.query(
+    `select id, status, title, amount_cents, updated_at from purchase_requests
+     where id = any($1::uuid[]) order by id`,
+    [SEEDED_REQUESTS],
+  );
+  const approvals = await owner.query(
+    `select id, purchase_request_id, approver_id, decision, comment, decided_at from approvals
+     where purchase_request_id = any($1::uuid[]) order by id`,
+    [SEEDED_REQUESTS],
+  );
+  return { requests: requests.rows, approvals: approvals.rows };
+}
