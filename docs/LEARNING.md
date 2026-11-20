@@ -158,3 +158,9 @@ One entry per new concept: what it is, why it matters, where it lives in this re
 - **What:** Submit and decide first read the request to pick the right answer (404, 403, 409), then change the status with `UPDATE … WHERE id = $1 AND status = 'submitted' RETURNING id`. No row back means someone else changed it first: 409, and nothing is written.
 - **Why it matters:** Read, then write, is a race: two approvers can both read `submitted` and both decide, leaving two approvals. Under Postgres' default READ COMMITTED, the second `UPDATE` waits for the first transaction's row lock, then re-checks its `WHERE` against the committed row, finds `approved`, and updates nothing. That closes the race without a lock of our own, a unique key or a migration.
 - **Where:** [purchase-requests.service.ts](../apps/api/src/purchase-requests/purchase-requests.service.ts); the concurrency test in [decision.spec.ts](../apps/api/src/purchase-requests/decision.spec.ts).
+
+## Building the UI against a contract with a mocked fetch (Phase 4)
+
+- **What:** The web screens are written and tested before the API routes exist. The only fake is `fetch`: a helper answers by `METHOD /path` with fixtures that are parsed by the shared Zod schemas, and records every call. The app parses every response with the same schemas, so a drifting shape fails loudly on both sides.
+- **Why it matters:** The UI job and the API job run in parallel from the contract. Because fixtures must satisfy the real schemas, the mock cannot quietly drift from the contract. The database and RLS are never mocked; only the network edge is.
+- **Where:** [api.ts](../apps/web/src/api.ts), [fixtures.ts](../apps/web/src/test/fixtures.ts), [App.test.tsx](../apps/web/src/App.test.tsx).
