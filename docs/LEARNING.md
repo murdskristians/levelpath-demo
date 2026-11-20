@@ -146,3 +146,15 @@ One entry per new concept: what it is, why it matters, where it lives in this re
 - **What:** Before the API and the UI are built, their agreement is written down and merged: the routes, who may call them, the errors, and the request and response shapes as Zod schemas in `packages/shared`. The API validates every body with those schemas; the web app validates its forms and reads responses with the same ones.
 - **Why it matters:** Two jobs can then run at the same time in separate worktrees, an API job and a UI job, without waiting for each other or guessing. A shape that changes breaks the build of both, not a demo. It is also the review point that matters most: the error rules (404 for what you may not see, 403 only when it reveals nothing) were decided once, by a person.
 - **Where:** [purchase-requests-contract.md](specs/purchase-requests-contract.md), [packages/shared/src/](../packages/shared/src/).
+
+## Guards run before pipes: a role check that reveals nothing (Phase 3)
+
+- **What:** Nest handles a request in a fixed order: middleware, then guards (global, then controller, then route), then interceptors, then pipes, then the handler. `ApproverGuard` is a route guard (`@UseGuards`), so it runs after the global `AuthGuard` has resolved the caller's role, and before `ZodValidationPipe` parses the body or the service looks up the id.
+- **Why it matters:** A requester calling `POST /purchase-requests/:id/decision` gets the same 403 for every input: a valid body or not, a real id, another company's id or not a UUID at all. Had the role been checked in the handler, the 400 for a bad body and the 404 for an unknown id would come first and tell a requester something about the request they named. Ordering the checks is part of what a response may reveal.
+- **Where:** [approver.guard.ts](../apps/api/src/auth/approver.guard.ts), [zod-validation.pipe.ts](../apps/api/src/validation/zod-validation.pipe.ts), [decision.spec.ts](../apps/api/src/purchase-requests/decision.spec.ts).
+
+## Status changes as a conditional UPDATE (Phase 3)
+
+- **What:** Submit and decide first read the request to pick the right answer (404, 403, 409), then change the status with `UPDATE … WHERE id = $1 AND status = 'submitted' RETURNING id`. No row back means someone else changed it first: 409, and nothing is written.
+- **Why it matters:** Read, then write, is a race: two approvers can both read `submitted` and both decide, leaving two approvals. Under Postgres' default READ COMMITTED, the second `UPDATE` waits for the first transaction's row lock, then re-checks its `WHERE` against the committed row, finds `approved`, and updates nothing. That closes the race without a lock of our own, a unique key or a migration.
+- **Where:** [purchase-requests.service.ts](../apps/api/src/purchase-requests/purchase-requests.service.ts); the concurrency test in [decision.spec.ts](../apps/api/src/purchase-requests/decision.spec.ts).
