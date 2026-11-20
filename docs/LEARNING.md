@@ -146,3 +146,9 @@ One entry per new concept: what it is, why it matters, where it lives in this re
 - **What:** Before the API and the UI are built, their agreement is written down and merged: the routes, who may call them, the errors, and the request and response shapes as Zod schemas in `packages/shared`. The API validates every body with those schemas; the web app validates its forms and reads responses with the same ones.
 - **Why it matters:** Two jobs can then run at the same time in separate worktrees, an API job and a UI job, without waiting for each other or guessing. A shape that changes breaks the build of both, not a demo. It is also the review point that matters most: the error rules (404 for what you may not see, 403 only when it reveals nothing) were decided once, by a person.
 - **Where:** [purchase-requests-contract.md](specs/purchase-requests-contract.md), [packages/shared/src/](../packages/shared/src/).
+
+## Building the UI against a contract with a mocked fetch (Phase 4)
+
+- **What:** The web screens are written and tested before the API routes exist. The only fake is `fetch`: a helper answers by `METHOD /path` with fixtures that are parsed by the shared Zod schemas, and records every call. The app parses every response with the same schemas, so a drifting shape fails loudly on both sides.
+- **Why it matters:** The UI job and the API job run in parallel from the contract. Because fixtures must satisfy the real schemas, the mock cannot quietly drift from the contract. The database and RLS are never mocked; only the network edge is.
+- **Where:** [api.ts](../apps/web/src/api.ts), [fixtures.ts](../apps/web/src/test/fixtures.ts), [App.test.tsx](../apps/web/src/App.test.tsx).
