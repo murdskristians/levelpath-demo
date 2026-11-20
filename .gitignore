@@ -17,6 +17,8 @@ coverage/
 /.worktrees/
 .ports.env
 .claude/settings.local.json
+# Written by /plan for the guard's test lock: this checkout's state, not the repo's.
+.claude/task-type
 __pycache__/
 .venv/
 

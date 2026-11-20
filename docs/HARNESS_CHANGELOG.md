@@ -351,3 +351,72 @@ Format:
   - `factory/tests/run_test.py`: 42 checks pass (7 new: hand-over lists a repo path, upload path and URL, private repo, logged-out `gh`, non-GitHub origin, usage).
   - A real upload of PR #2's two screenshots returned URLs that serve `200 OK`; the ADW's own `screenshots()` produced the same section from the real run.
 - **Why:** A review comment should show what the verifier saw. Evidence you have to dig for is evidence nobody checks.
+
+## 2026-11-18: A spec criterion no build could pass
+
+- **What went wrong:** The planner's Phase 2 spec gave the app `INSERT` on `tenants` and required a test where the app inserts a tenant row and succeeds. Under the spec's own policy (`tenants` is keyed on `id`), company A may insert only the row whose id is A, and that row already exists. No correct build could pass the test, so the builder would have had to change it or escalate. The orchestrator caught it reading the spec before `/plan`.
+- **Before:** the planner's checklist asked for numbered, observable criteria, but not for criteria that fit the requirements.
+- **After:**
+  - **The spec:** the app only reads `tenants` and `users` (Chris's decision: sign-up and user management are out of scope). Their insert, update and delete tests expect "permission denied", which is stronger than RLS alone.
+  - **`planner.md`:** before finishing, read every criterion as the builder will, against the grants, policies, keys and defaults the spec sets.
+- **Why:** In L2 and L3 nobody reads the spec before the builder does, so a contradiction costs a round or an escalation. The check belongs where the spec is written.
+
+## 2026-11-18: Each test run gets its own database, and the gate needs Postgres
+
+- **What changed:** Phase 2 brought the first tests that need a database. The `rls-data-access` skill had planned for `factory/checks.sh` to create a database per run, but the gate is a protected path: runs can't change it, and it can't start Postgres per worktree either, since a second Compose project would fight over port 5432.
+- **Before:** the skill said `factory/checks.sh` creates `lp_<run>`. `pnpm test` needed nothing running.
+- **After:**
+  - **The tests make their own database:** Vitest's global setup creates `lp_<random>` on the one shared Postgres server, migrates and seeds it, and drops it at the end. Every driver gets this, and so does a plain `pnpm test`, and `checks.sh` is unchanged.
+  - **The gate needs Postgres up:** without it, the API tests fail with "Run `pnpm db:up` first". They are never skipped, so a missing database can't pass as green. `CLAUDE.md`, the factory skill and the ADW README say to run `pnpm db:up` before a run.
+- **Evidence:** two test runs started at the same moment both pass and leave no `lp_*` database behind (see the Phase 2 PR).
+- **Why:** Parallel runs must not share rows, and a gate that quietly skips the database tests would pass exactly the changes they exist to catch.
+
+## 2026-11-18: `/plan`'s task-type file was about to be committed
+
+- **What went wrong:** `/plan` writes `.claude/task-type` (`feature`, `bug` or `chore`) for the guard's test lock. The file wasn't git-ignored, so Phase 2's first `git status` listed it as new, ready to be committed into the PR.
+- **Before:** `.claude/task-type` was untracked and not ignored.
+- **After:** `.gitignore` lists it next to `.claude/settings.local.json`: it is this checkout's state, not the repo's.
+- **Why:** A committed task type would set the test lock for everyone who checks the branch out, and a `bug` left behind would block test edits in the next feature.
+
+## 2026-11-18: Phase 2 review round 1: three defense-in-depth gaps
+
+- **What the reviewers caught:** the round passed on isolation (bugs, security and the verifier: PASS), but `reviewer-bugs` and `reviewer-security` found three ways the setup could fail quietly or badly:
+  - nothing outside the tests checked that the API's login is subject to RLS, so `APP_DB_USER` pointed at the owner would have started cleanly and served every tenant;
+  - the pool had no `error` listener, so a Postgres restart would have crashed the API;
+  - the app role could create temporary tables, which Postgres searches before `public`, so one named like a real table would shadow it on that pooled connection.
+- **Before:** the rules were in the code and the tests, but a wrong environment could still switch them off without an error.
+- **After:**
+  - **Checked at runtime:** the API refuses to start on a login that is a superuser, has `BYPASSRLS` or owns tables. `pnpm db:migrate` refuses an existing `APP_DB_USER` with `SUPERUSER`, `BYPASSRLS`, `CREATEROLE` or `CREATEDB`.
+  - **Resilient:** the pool logs a dropped idle connection instead of exiting.
+  - **No temporary tables:** migration 0001 revokes `TEMPORARY` on the database from `PUBLIC`.
+  - **Tests for each.** The new pool test fails without the listener (checked by removing it).
+  - **`rls-data-access` skill:** the runtime check and two rules for Phase 3 writes (no user input in raw SQL; never accept a client-chosen id, and answer key violations as "not found").
+- **Why:** Isolation that depends on configuration must check that configuration itself; a misconfiguration should stop the app, not quietly turn the policies off.
+
+## 2026-11-18: Phase 2 review round 2: the checks learn about role memberships
+
+- **What the reviewer caught:** round 2 passed, and `reviewer-security` probed past its own round-1 findings:
+  - A login that is a **member** of the owner role passed both new checks. Superuser and `BYPASSRLS` aren't inherited, but `SET ROLE` to the owner is allowed, and ownership is inherited. A plausible path: `GRANT levelpath_owner TO levelpath_app` to clear a "permission denied". `REPLICATION` was missed too.
+  - The startup check trusted the `TEMPORARY` revoke instead of checking it, and didn't check `CREATE` on the database (a schema named after the role would come before `public`).
+  - The pool listener covered idle connections only. A connection that dies while a request holds it emits `error` on the client, and that still crashed the API.
+  - Skill rules 5 and 6 didn't name Kysely's unsafe `sql.*` helpers or unique keys that leak across tenants.
+- **Before:** the checks looked at the login's own attributes and at tables it owns in `public`.
+- **After:**
+  - **Both checks** refuse `REPLICATION` and membership in any role. The startup check also refuses ownership of any table or schema and the right to create schemas or temporary tables.
+  - **Every client** gets an `error` listener. A test ends a connection in use and an idle one with `pg_terminate_backend`, and fails if either listener is removed (checked by removing each).
+  - **Skill rules 5 and 6** name the unsafe helpers and require unique keys to start with `tenant_id`.
+- **Why:** A check that reads only the obvious attributes can be walked around by the next-most-obvious misconfiguration. Asking the reviewer to look again after a fix found what the first fix missed.
+
+## 2026-11-18: Phase 2 review round 3: an untyped argument picks the wrong function
+
+- **What the reviewer caught:** round 3 passed, and `reviewer-security` went one level further.
+  - **`resolveUser` sent its id untyped.** Postgres resolves an untyped argument to a `text` overload before the real `uuid` function. With `CREATE` on `public` (the usual fix for "permission denied for schema public"), SQL running as the app role could plant `app_resolve_user(text)` and decide every later caller's tenant. The reviewer proved it in a rolled-back probe; our own test reproduced it: without the cast, Alice resolved to Globex.
+  - **`GRANT ALL` would add `TRUNCATE`,** which RLS doesn't cover, and the startup check didn't look at grants on objects.
+  - **Three refusals had no test.**
+- **Before:** `public.app_resolve_user(${userId})`; the startup check read `current_user` and the login's attributes, memberships, ownership and database rights.
+- **After:**
+  - **The cast:** `public.app_resolve_user(${userId}::uuid)`, with a test that plants the look-alike.
+  - **Grants are checked too:** the startup check refuses `CREATE` in any schema and `TRUNCATE` on any table, reads `session_user`, and its hint says to fix the login or the database's grants.
+  - **Every branch is tested:** the owner tests assert the whole list of problems.
+  - **Skill rules 2 and 5:** fix a "permission denied" with a narrow grant, never `GRANT ALL`; cast arguments to functions in raw SQL.
+- **Why:** The common fixes for a "permission denied" (`GRANT ALL`, `GRANT CREATE ON SCHEMA public`, a role membership) are exactly what would weaken isolation. The API should refuse to start, not quietly accept them.
