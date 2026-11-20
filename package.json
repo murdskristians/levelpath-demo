@@ -12,7 +12,7 @@
     "lint": "eslint . && prettier --check .",
     "format": "prettier --write .",
     "test": "pnpm -r test",
-    "dev": "pnpm db:up && pnpm -r --parallel dev",
+    "dev": "pnpm db:up && pnpm --filter @levelpath/shared build && pnpm -r --parallel dev",
     "db:up": "docker compose up -d --wait db",
     "db:down": "docker compose down",
     "db:migrate": "pnpm --filter @levelpath/api db:migrate",

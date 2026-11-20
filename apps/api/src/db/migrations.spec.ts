@@ -12,7 +12,7 @@ import {
   TENANT_TABLES,
   testDb,
 } from '../../test/helpers.js';
-import { APPROVAL_DECISIONS, PURCHASE_REQUEST_STATUSES, USER_ROLES } from './values.js';
+import { APPROVAL_DECISIONS, PURCHASE_REQUEST_STATUSES, USER_ROLES } from '@levelpath/shared';
 
 // Spec criteria 1 to 4 and 9: the migrations, the seed, the app role's rights, and
 // the composite foreign keys. Everything runs against real Postgres.

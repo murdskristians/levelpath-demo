@@ -1,6 +1,5 @@
-// The value lists the database CHECK constraints allow, defined once for the API.
-// A test checks the database accepts every one of them, so the two can't drift.
-// Phase 3 moves them to packages/shared when the web app needs them too.
+// The value lists the database CHECK constraints allow, defined once for both apps.
+// An API test checks the database accepts every one of them, so the two can't drift.
 
 export const USER_ROLES = ['requester', 'approver'] as const;
 export type UserRole = (typeof USER_ROLES)[number];

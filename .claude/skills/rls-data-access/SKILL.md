@@ -113,7 +113,7 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON public.line_items TO {{app_role}};
 - Every reference to another tenant table is composite, `(tenant_id, x_id)`,
   against a `UNIQUE (tenant_id, id)` on the parent.
 - Add the table's type to `apps/api/src/db/schema.ts` (`Generated<>` for columns
-  Postgres fills in) and any value list to `apps/api/src/db/values.ts`.
+  Postgres fills in) and any value list to `packages/shared/src/values.ts`.
 - Apply it: `pnpm db:migrate` (the dev database); the tests migrate their own.
 
 ## The isolation tests (required for every tenant table)
