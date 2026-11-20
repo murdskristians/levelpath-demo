@@ -33,11 +33,13 @@ One folder per feature under `apps/api/src/<feature>/`:
 
 Request bodies, params and query strings are validated before the controller
 uses them. The schemas live in `packages/shared` (Zod), so the web app
-validates with the same rules. Parse them in a pipe:
-`@Body(new ZodValidationPipe(createPurchaseRequestSchema))`, and turn a parse
-failure into `BadRequestException` with the field errors. The first change
-that needs Zod or the pipe adds them; check the current versions first
-(`pnpm view zod dist-tags peerDependencies`).
+validates with the same rules. Parse a body with the pipe in
+`src/validation/zod-validation.pipe.ts`:
+`@Body(new ZodValidationPipe(createPurchaseRequestSchema))`. The route gets the
+parsed output (trimmed, defaults filled in); a failure, or no body, is a 400
+`{ statusCode, message, issues: [{ path, message }] }`. A path id is checked with
+`isUuid` (`src/db/uuid.ts`) in the service, and a non-UUID is a 404: not
+`ParseUUIDPipe`, which answers 400.
 
 Never trust a tenant id, user id or role sent by the client: they come from
 the request context that the auth guard sets.
@@ -61,8 +63,10 @@ list(@CurrentUser() user: AuthUser) {
 }
 ```
 
-Zod and the validation pipe are not wired yet; the first route with a body
-adds them.
+- **`ApproverGuard`** (`src/auth/approver.guard.ts`) on a route,
+  `@UseGuards(ApproverGuard)`, answers 403 unless the caller is an approver.
+  Nest runs guards before pipes, so the role is checked before the body is
+  parsed or any id looked up: a requester gets the same 403 for every input.
 
 ## Data and tenants
 

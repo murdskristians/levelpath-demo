@@ -28,6 +28,7 @@ One app on chosen ports (agents always do this): `API_PORT=<a> pnpm --filter @le
 - `packages/shared`: ESM. The value lists and the API contract (`docs/specs/purchase-requests-contract.md`) as Zod schemas, used by both apps: the API validates bodies with them, the web app its forms. `pnpm build` builds it first; to run one app alone, `pnpm --filter @levelpath/shared build` first.
 - `db/`: `migrations/` (plain numbered `.sql`, applied as the owner by `pnpm db:migrate`; never edit one that is on `main`) and `seed.sql`. RLS is enabled and forced on every tenant table.
 - `apps/api/src/db/`: `DatabaseService`, the only way into Postgres: `withTenant(tenantId, trx => …)` for all tenant data (Kysely, as the non-owner app role). `apps/api/src/auth/`: the global `AuthGuard`, `@Public()`, `@CurrentUser()`.
+- `apps/api/src/suppliers/` and `apps/api/src/purchase-requests/`: the contract's routes. `apps/api/src/validation/zod-validation.pipe.ts` validates bodies with the shared schemas; `apps/api/src/auth/approver.guard.ts` guards the approver-only routes.
 - `apps/api/db-tools/`: the migration and seed runner (owner). `apps/api/test/`: the per-run database setup and test helpers.
 - `docs/`: `intent/`, `specs/`, `plans/` (the artifact trail), `templates/`, `LEARNING.md`, `HARNESS_CHANGELOG.md`.
 
