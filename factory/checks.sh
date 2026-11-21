@@ -10,6 +10,13 @@
 # Phase 2 adds the RLS isolation suite here, against a database per run.
 set -euo pipefail
 
+# A replacement character (U+FFFD) means text was written in the wrong encoding.
+# Prettier and the tests don't notice it; job 003 merged one into CLAUDE.md.
+if git grep --untracked -nI $'\xEF\xBF\xBD' --. ':!pnpm-lock.yaml'; then
+  echo "checks: U+FFFD (a broken character) in the files above; rewrite them as UTF-8" >&2
+  exit 1
+fi
+
 pnpm install --frozen-lockfile --prefer-offline
 pnpm build
 pnpm lint

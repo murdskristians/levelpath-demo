@@ -420,3 +420,49 @@ Format:
   - **Every branch is tested:** the owner tests assert the whole list of problems.
   - **Skill rules 2 and 5:** fix a "permission denied" with a narrow grant, never `GRANT ALL`; cast arguments to functions in raw SQL.
 - **Why:** The common fixes for a "permission denied" (`GRANT ALL`, `GRANT CREATE ON SCHEMA public`, a role membership) are exactly what would weaken isolation. The API should refuse to start, not quietly accept them.
+
+## 2026-11-21: Phase 3 ran as two parallel factory jobs; what the end-to-end check found
+
+- **What happened:** the contract (Zod schemas in `packages/shared`) merged first, then issues #5 (API) and #6 (web) ran as two factory jobs at the same time. Both passed in round 1 and both approvers escalated, as the rules say they must (roles, a new dependency, a harness skill edit). Cost: $5.56 and $1.78 API-equivalent. Chris merged #7 and #8. The end-to-end check on `main` (real UI and real API together, the first time they met) passed every step in the browser and 11 of 11 API edge cases. Building both sides from one contract left nothing to reconcile.
+- **What no review caught:** four problems in the harness, none of them in the app. Each one is an entry below.
+
+## 2026-11-21: The board kept showing merged jobs as "needs human"
+
+- **What went wrong:** after Chris merged both PRs, the control room still showed them waiting for a human. A job moves to `merged` only inside `job queue`, and only the orchestrator runs that, at the start of its next pass. The orchestrator's session had ended, so nothing ran it.
+- **Before:** merge detection lived only in `cmd_queue`.
+- **After:**
+  - **`job check-merges`:** merge detection on its own (`queue` calls it too). It reports on stderr, so `queue`'s rows on stdout stay as the orchestrator reads them.
+  - **The control room** runs it every 60 s in a separate process. In-process it would hold every job's lock for the server's lifetime, because `job` releases a lock only when its process exits.
+  - **`run_test.py`:** check-merges leaves a job with an open PR alone, and moves it once the PR is merged (43 passed).
+  - **The name:** the first one, `job merged`, failed the existing test "usage lists no merge command". The command was renamed; the test was kept as it was.
+- **Why:** the board must show what is true on GitHub, not what the last orchestrator pass saw. "Merged" is decided by a person, so whatever shows a person's actions has to notice them.
+
+## 2026-11-21: A pull with a new dependency broke `pnpm dev`
+
+- **What went wrong:** PR #8 added `zod` to `apps/api`. After `git pull`, the API watcher failed with "Cannot find module 'zod'" and waited. The web app kept running, so the page showed "Bad Gateway", which looked like a UI problem.
+- **Before:** `pnpm dev` assumed `node_modules` matched the lockfile.
+- **After:** `pnpm dev` runs `pnpm install` first: about 3 s when nothing changed. LEARNING.md has "After a pull: install, then run".
+- **Why:** the gate already installs before every check (`checks.sh`); the dev loop now does the same.
+
+## 2026-11-21: The web app started before the API, so the first page load failed
+
+- **What went wrong:** right after `pnpm dev`, the open page called `/me` while the API was still compiling (about 10 s, against about 1 s for Vite). Vite's proxy logged `ECONNREFUSED`, and the page showed "Bad Gateway" until it was reloaded.
+- **Before:** the web's `dev` script was `vite`.
+- **After:** `node scripts/wait-for-api.mjs && vite`. Vite starts once the API's `/health` answers. After 60 s (`WAIT_FOR_API_MS`) it starts anyway, so the web app still runs on its own, against mocked fetch or an API on another port. Checked both paths: it finds a running API in 0.2 s; with `API_PORT=5999` it gives up after the limit and exits 0.
+- **Why:** when the Vite URL is printed, the whole stack is ready. A "Bad Gateway" now means the API is really down.
+
+## 2026-11-21: `/try` pointed a PR's web app at main's API
+
+- **What went wrong (found while fixing the above):** `/try` started the PR's API with `API_PORT=5080`, but its web app without `API_PORT`. So the web app proxied to port 3000: main's API if one was running, so the PR's UI was checked against the wrong backend without any sign of it.
+- **Before:** `pnpm --filter @levelpath/web dev --port 5081 --strictPort`.
+- **After:** `API_PORT=5080` on the web command too, with a line saying why.
+- **Why:** a check against the wrong server is worse than no check: it passes.
+
+## 2026-11-21: A broken character merged into CLAUDE.md
+
+- **What went wrong:** job 003's builder wrote `CLAUDE.md` with a U+FFFD replacement character in `/api/…`. The approver noticed it and called it "a small fix the human can make", but the PR merged with it. Prettier, ESLint and the tests don't look at characters.
+- **Before:** nothing failed on text written in the wrong encoding.
+- **After:**
+  - **`checks.sh`** fails when any tracked or new file contains U+FFFD, and names the file. Checked: it failed on `main`'s `CLAUDE.md` and passed after the fix.
+  - **`CLAUDE.md`** is fixed.
+- **Why:** a defect the approver describes but the gate doesn't fail is left for a busy human to notice. A check that is easy to automate belongs in the gate.
