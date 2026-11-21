@@ -416,12 +416,35 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(400, {"error": str(e)})
 
 
+MERGE_POLL_SECONDS = 60
+
+
+def watch_merges():
+    """Move jobs whose PR a person merged to merged, even when no orchestrator runs.
+    Without this the board shows needs-human after the merge until the next
+    `/factory run`. It runs `job check-merges` as its own process: factory/bin/job keeps
+    each job's lock until its process exits, so calling it in this long-lived
+    process would hold every job's lock and block the orchestrator."""
+    cmd = [sys.executable, "-X", "utf8", str(FACTORY / "bin" / "job"), "check-merges"]
+    while True:
+        try:
+            res = subprocess.run(cmd, cwd=REPO, capture_output=True, text=True, timeout=120)
+            out = (res.stdout + res.stderr).strip()
+            if out:
+                print(out if res.returncode == 0 else f"merge check failed: {out}")
+        except (OSError, subprocess.TimeoutExpired) as e:
+            print(f"merge check failed: {e}")
+        time.sleep(MERGE_POLL_SECONDS)
+
+
 def main(argv):
     parser = argparse.ArgumentParser(description="The control room for every run.")
     parser.add_argument("--port", type=int, default=8000)
     args = parser.parse_args(argv)
     server = ThreadingHTTPServer(("127.0.0.1", args.port), Handler)
+    threading.Thread(target=watch_merges, daemon=True).start()
     print(f"Control room: http://127.0.0.1:{args.port}   (Ctrl+C stops it; runs keep going)")
+    print(f"Checks for merged PRs every {MERGE_POLL_SECONDS} s")
     try:
         server.serve_forever()
     except KeyboardInterrupt:

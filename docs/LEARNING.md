@@ -159,8 +159,20 @@ One entry per new concept: what it is, why it matters, where it lives in this re
 - **Why it matters:** Read, then write, is a race: two approvers can both read `submitted` and both decide, leaving two approvals. Under Postgres' default READ COMMITTED, the second `UPDATE` waits for the first transaction's row lock, then re-checks its `WHERE` against the committed row, finds `approved`, and updates nothing. That closes the race without a lock of our own, a unique key or a migration.
 - **Where:** [purchase-requests.service.ts](../apps/api/src/purchase-requests/purchase-requests.service.ts); the concurrency test in [decision.spec.ts](../apps/api/src/purchase-requests/decision.spec.ts).
 
-## Building the UI against a contract with a mocked fetch (Phase 4)
+## Building the UI against a contract with a mocked fetch (Phase 3)
 
 - **What:** The web screens are written and tested before the API routes exist. The only fake is `fetch`: a helper answers by `METHOD /path` with fixtures that are parsed by the shared Zod schemas, and records every call. The app parses every response with the same schemas, so a drifting shape fails loudly on both sides.
 - **Why it matters:** The UI job and the API job run in parallel from the contract. Because fixtures must satisfy the real schemas, the mock cannot quietly drift from the contract. The database and RLS are never mocked; only the network edge is.
 - **Where:** [api.ts](../apps/web/src/api.ts), [fixtures.ts](../apps/web/src/test/fixtures.ts), [App.test.tsx](../apps/web/src/App.test.tsx).
+
+## A dev proxy, and what "Bad Gateway" means (Phase 3)
+
+- **What:** In development the browser talks only to Vite (port 5173). Vite forwards every `/api/...` request to the API on `API_PORT` (3000), so the page and the API look like one origin and need no CORS setup. A **gateway** is anything that forwards requests to a server behind it; **502 Bad Gateway** means the gateway is up but the server behind it didn't answer.
+- **Why it matters:** "Bad Gateway" in the app is never an API bug: it means the API isn't running (or not yet). Look at the API's own output first. Vite starts in ~1 s and the API in ~10 s, so the web's `dev` script now waits for the API's `/health` before starting Vite.
+- **Where:** `apiProxy` in [vite.config.ts](../apps/web/vite.config.ts), [wait-for-api.mjs](../apps/web/scripts/wait-for-api.mjs).
+
+## After a pull: install, then run (Phase 3)
+
+- **What:** `git pull` updates `package.json` and `pnpm-lock.yaml`, but not `node_modules`. If a merged PR added a package, the code needs a module that isn't installed until `pnpm install` runs. `pnpm install` with nothing new to install takes about 3 s.
+- **Why it matters:** After PR #8 added `zod` to the API, the API stopped compiling ("Cannot find module 'zod'"), while the web app, with nothing new, kept running. That looked like a web problem. `pnpm dev` now runs `pnpm install` first.
+- **Where:** the `dev` script in the root [package.json](../package.json).

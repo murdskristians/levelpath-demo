@@ -303,8 +303,12 @@ time.sleep(1.5)
 r = sh([BASH, "-lc", f"factory/bin/port pid {port}"], proj, env=env)
 # python3 may be a launcher: the listener can be its child process, not server.pid
 check("port pid finds the dev server", r.returncode == 0 and r.stdout.split(), r.stdout + r.stderr)
+before = json.loads((jd / "job.json").read_text())["stage"]
+jmain(["check-merges"])  # the PR is still open: nothing moves
+stage = json.loads((jd / "job.json").read_text())["stage"]
+check("check-merges leaves a job with an open PR alone", stage == before, f"{before} -> {stage}")
 pr_state["state"] = "MERGED"
-jmain(["advance", jid, "merged"])
+jmain(["check-merges"])  # what the control room runs every minute
 server.wait(timeout=10)
 stage = json.loads((jd / "job.json").read_text())["stage"]
 check("merged by a person: job stage", stage == "merged", stage)

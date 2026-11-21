@@ -25,7 +25,9 @@ pr: $1
 4. In the worktree: `pnpm install --frozen-lockfile`, then start the app in
    the background on the ports reserved for trying:
    `API_PORT=5080 pnpm --filter @levelpath/api dev` and
-   `pnpm --filter @levelpath/web dev --port 5081 --strictPort`.
+   `API_PORT=5080 pnpm --filter @levelpath/web dev --port 5081 --strictPort`.
+   The web app needs `API_PORT` too: its dev proxy and its wait for the API
+   read it, and without it they reach main's API on 3000 instead of the PR's.
 5. Open http://localhost:5081 in the browser (`start http://localhost:5081` on
    Windows).
 6. Show Chris what to check. Use the decision's "For the human" section from
