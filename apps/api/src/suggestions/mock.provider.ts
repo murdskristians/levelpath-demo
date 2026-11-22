@@ -51,7 +51,11 @@ const CURRENCY_OF_SYMBOL: Record<string, string> = { '€': 'EUR', $: 'USD', '£
 const QUANTITY = /(?<![\d,.€$£])(\d+) [A-Za-z]/;
 /** Quantities written as words, `one` to `twelve`; the index plus one is the number. */
 const NUMBER_WORDS = 'one two three four five six seven eight nine ten eleven twelve'.split(' ');
-/** `Two laptops`: a number word followed by a space and a word. */
+/**
+ * `Two laptops`: a number word followed by a space and a word. A heuristic, like the rest of
+ * the mock: `no one else` or `one of our` also reads as quantity 1. Only the real model
+ * understands the sentence; the mock just has to be deterministic.
+ */
 const QUANTITY_WORD = new RegExp(`\\b(${NUMBER_WORDS.join('|')}) [A-Za-z]`, 'i');
 /** Digits with `,` thousands and optional cents: `1,200`, `15`, `9.99`. */
 const NUMBER = String.raw`(\d{1,3}(?:,\d{3})+|\d+)(?:\.(\d{1,2}))?`;
