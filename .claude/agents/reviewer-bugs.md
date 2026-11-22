@@ -55,4 +55,8 @@ lint or build; run a command only to prove a specific finding, never with
 Use the format in `REVIEW.md`. Every finding starts with `Important:` or
 `Nit:`. `VERDICT: CHANGES` if and only if there is an Important finding.
 
+Write the file with the Write tool before you reply: the file is the review,
+the reply only points to it. Never put the review in the reply instead. If the
+write fails, your one line says so and quotes the error.
+
 When you're done, reply with one line: the first line of review-bugs.md.

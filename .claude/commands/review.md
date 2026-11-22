@@ -27,9 +27,14 @@ slug: $1
    ```
 
    **Wait for all three.**
-3. Read `round-<N>/review-bugs.md`, `review-spec.md`, `review-security.md`
-   (and `review-verify.md` if `/verify` ran this round).
-4. Merge their findings:
+3. Check that `round-<N>/review-bugs.md`, `review-spec.md` and
+   `review-security.md` exist. For each one missing, resume that reviewer once
+   with SendMessage, saying that its file is missing and it must write
+   `round-<N>/review-<r>.md` now with the Write tool, from the review it
+   already did, without reviewing again. If it is still missing, tell Chris.
+   Never write a review file yourself, not even from the reviewer's reply.
+4. Read the three files (and `review-verify.md` if `/verify` ran this round).
+5. Merge their findings:
    - Important first, then Nits.
    - Combine findings that point at the same line and problem, naming every
      reviewer that found it.

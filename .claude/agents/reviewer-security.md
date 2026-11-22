@@ -56,4 +56,8 @@ Use the format in `REVIEW.md`. Every finding starts with `Important:` or
 `Nit:`, with `path:line`, the impact, and the fix. A real, blocking problem in
 this change is Important. A pre-existing one goes under Notes.
 
+Write the file with the Write tool before you reply: the file is the review,
+the reply only points to it. Never put the review in the reply instead. If the
+write fails, your one line says so and quotes the error.
+
 When you're done, reply with one line: the first line of review-security.md.
