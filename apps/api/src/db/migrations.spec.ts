@@ -12,7 +12,13 @@ import {
   TENANT_TABLES,
   testDb,
 } from '../../test/helpers.js';
-import { APPROVAL_DECISIONS, PURCHASE_REQUEST_STATUSES, USER_ROLES } from '@levelpath/shared';
+import {
+  APPROVAL_DECISIONS,
+  MAX_DESCRIPTION_LENGTH,
+  PURCHASE_REQUEST_CATEGORIES,
+  PURCHASE_REQUEST_STATUSES,
+  USER_ROLES,
+} from '@levelpath/shared';
 
 // Spec criteria 1 to 4 and 9: the migrations, the seed, the app role's rights, and
 // the composite foreign keys. Everything runs against real Postgres.
@@ -363,6 +369,19 @@ describe('the value lists in values.ts', () => {
           [A.tenant, A.requester, A.suppliers[0], status],
         );
       }
+      for (const category of PURCHASE_REQUEST_CATEGORIES) {
+        await owner.query(
+          `insert into purchase_requests (tenant_id, requester_id, supplier_id, title, amount_cents, category)
+           values ($1, $2, $3, 'probe', 1, $4)`,
+          [A.tenant, A.requester, A.suppliers[0], category],
+        );
+      }
+      // The longest description the shared schema allows is the longest the database takes.
+      await owner.query(
+        `insert into purchase_requests (tenant_id, requester_id, supplier_id, title, amount_cents, description)
+         values ($1, $2, $3, 'probe', 1, repeat('x', $4))`,
+        [A.tenant, A.requester, A.suppliers[0], MAX_DESCRIPTION_LENGTH],
+      );
       for (const decision of APPROVAL_DECISIONS) {
         await owner.query(
           `insert into approvals (tenant_id, purchase_request_id, approver_id, decision)
@@ -386,5 +405,34 @@ describe('the value lists in values.ts', () => {
         [A.tenant, A.requester, A.suppliers[0]],
       ),
     ).rejects.toMatchObject(CHECK_VIOLATION);
+    await expect(
+      owner.query(
+        `insert into purchase_requests (tenant_id, requester_id, supplier_id, title, amount_cents, category)
+         values ($1, $2, $3, 'probe', 1, 'furniture')`,
+        [A.tenant, A.requester, A.suppliers[0]],
+      ),
+    ).rejects.toMatchObject(CHECK_VIOLATION);
+    await expect(
+      owner.query(
+        `insert into purchase_requests (tenant_id, requester_id, supplier_id, title, amount_cents, description)
+         values ($1, $2, $3, 'probe', 1, repeat('x', $4))`,
+        [A.tenant, A.requester, A.suppliers[0], MAX_DESCRIPTION_LENGTH + 1],
+      ),
+    ).rejects.toMatchObject(CHECK_VIOLATION);
+  });
+});
+
+describe('migration 0005 (Phase 4 criterion 1)', () => {
+  it("gives every row that sets neither column category 'other' and an empty description", async () => {
+    // The seed sets neither column, so its rows get 0005's defaults. ADD COLUMN … DEFAULT
+    // fills rows that already exist the same way; the by-hand `pnpm db:migrate` on a
+    // database at 0004 (criterion 1) shows that.
+    const { rows } = await owner.query(
+      `
+      select category, description, count(*)::int as n from purchase_requests
+      where id = any($1::uuid[]) group by category, description`,
+      [[...A.purchaseRequests, ...B.purchaseRequests]],
+    );
+    expect(rows).toEqual([{ category: 'other', description: '', n: 8 }]);
   });
 });

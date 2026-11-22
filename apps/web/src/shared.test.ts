@@ -9,6 +9,7 @@ describe('@levelpath/shared in the web app', () => {
       title: 'Laptops',
       amountCents: 120000,
       supplierId: 'a0000000-0000-4000-8000-000000000201',
+      category: 'hardware',
     };
     expect(createPurchaseRequestSchema.parse(form).currency).toBe('EUR');
     expect(createPurchaseRequestSchema.safeParse({ ...form, amountCents: -1 }).success).toBe(false);

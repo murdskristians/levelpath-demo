@@ -1,5 +1,13 @@
 import { BadRequestException, Injectable, type PipeTransform } from '@nestjs/common';
-import type { ZodType } from 'zod';
+import type { ZodError, ZodType } from 'zod';
+
+/** One `{ path, message }` per Zod issue, the path joined by `.` ('' for the value itself). */
+export function zodIssues(error: ZodError): { path: string; message: string }[] {
+  return error.issues.map((issue) => ({
+    path: issue.path.map(String).join('.'),
+    message: issue.message,
+  }));
+}
 
 /**
  * Parses a request body with one of the shared Zod schemas:
@@ -17,10 +25,7 @@ export class ZodValidationPipe<T> implements PipeTransform<unknown, T> {
     throw new BadRequestException({
       statusCode: 400,
       message: 'Invalid request body',
-      issues: result.error.issues.map((issue) => ({
-        path: issue.path.map(String).join('.'),
-        message: issue.message,
-      })),
+      issues: zodIssues(result.error),
     });
   }
 }

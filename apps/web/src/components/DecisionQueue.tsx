@@ -1,5 +1,6 @@
 import { decisionSchema, type PurchaseRequest } from '@levelpath/shared';
 import { useState } from 'react';
+import { CATEGORY_LABELS } from '../categories';
 import { formatAmount } from '../money';
 
 type OnDecide = (id: string, input: { decision: 'approved' | 'rejected'; comment: string }) => void;
@@ -23,9 +24,11 @@ function DecisionItem({ request, onDecide }: { request: PurchaseRequest; onDecid
     <li>
       <h3>{request.title}</h3>
       <p>
-        {formatAmount(request.amountCents, request.currency)} · {request.supplier.name} · from{' '}
-        {request.requester.name}
+        {formatAmount(request.amountCents, request.currency)} · {request.supplier.name} ·{' '}
+        {CATEGORY_LABELS[request.category]} · from {request.requester.name}
       </p>
+      {/* Text the requester typed: a React text child, so it is never parsed as HTML. */}
+      {request.description && <p>{request.description}</p>}
       <label htmlFor={commentId}>{`Comment on ${request.title}`}</label>
       <textarea
         id={commentId}

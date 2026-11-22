@@ -1,23 +1,53 @@
 import { describe, expect, it } from 'vitest';
+import { z } from 'zod';
 import {
   createPurchaseRequestSchema,
   decisionSchema,
   MAX_AMOUNT_CENTS,
+  MAX_DESCRIPTION_LENGTH,
   purchaseRequestSchema,
+  suggestionRequestSchema,
+  suggestionResponseSchema,
+  suggestionSchema,
 } from './purchase-requests.js';
 
 const SUPPLIER = 'a0000000-0000-4000-8000-000000000201';
-const valid = { title: 'Laptops', amountCents: 120000, currency: 'EUR', supplierId: SUPPLIER };
+const valid = {
+  title: 'Laptops',
+  amountCents: 120000,
+  currency: 'EUR',
+  supplierId: SUPPLIER,
+  category: 'hardware',
+};
 
 describe('createPurchaseRequestSchema', () => {
-  it('accepts a valid request, trims the title, and defaults the currency to EUR', () => {
+  it('accepts a valid request, trims the title, and defaults the currency to EUR and the description to empty', () => {
     expect(
       createPurchaseRequestSchema.parse({
         title: '  Laptops ',
         amountCents: 0,
         supplierId: SUPPLIER,
+        category: 'hardware',
       }),
-    ).toEqual({ title: 'Laptops', amountCents: 0, currency: 'EUR', supplierId: SUPPLIER });
+    ).toEqual({
+      title: 'Laptops',
+      amountCents: 0,
+      currency: 'EUR',
+      supplierId: SUPPLIER,
+      category: 'hardware',
+      description: '',
+    });
+  });
+
+  it('trims the description and accepts the longest one', () => {
+    expect(
+      createPurchaseRequestSchema.parse({ ...valid, description: '  For the new hires  ' })
+        .description,
+    ).toBe('For the new hires');
+    const longest = 'x'.repeat(MAX_DESCRIPTION_LENGTH);
+    expect(createPurchaseRequestSchema.parse({ ...valid, description: longest }).description).toBe(
+      longest,
+    );
   });
 
   it.each([
@@ -37,6 +67,9 @@ describe('createPurchaseRequestSchema', () => {
     ['an amount as a string', { amountCents: '100' }],
     ['a lowercase currency', { currency: 'eur' }],
     ['a supplier id that is no UUID', { supplierId: 'not-a-uuid' }],
+    ['no category', { category: undefined }],
+    ['a category outside the list', { category: 'furniture' }],
+    ['a description over 2000 characters', { description: 'x'.repeat(MAX_DESCRIPTION_LENGTH + 1) }],
   ])('rejects %s', (_what, change) => {
     expect(createPurchaseRequestSchema.safeParse({ ...valid, ...change }).success).toBe(false);
   });
@@ -74,6 +107,8 @@ describe('purchaseRequestSchema', () => {
     amountCents: 640000,
     currency: 'EUR',
     status: 'approved',
+    category: 'office_supplies',
+    description: 'For the support team',
     supplier: { id: SUPPLIER, name: 'Bright Office Supplies' },
     requester: { id: 'a0000000-0000-4000-8000-000000000101', name: 'Alice' },
     createdAt: '2026-11-20T09:00:00.000Z',
@@ -100,5 +135,86 @@ describe('purchaseRequestSchema', () => {
         tenantId: 'a0000000-0000-4000-8000-000000000001',
       }).success,
     ).toBe(false);
+  });
+});
+
+describe('suggestionRequestSchema', () => {
+  it('accepts a description and trims it', () => {
+    expect(suggestionRequestSchema.parse({ description: '  20 laptops  ' })).toEqual({
+      description: '20 laptops',
+    });
+  });
+
+  it.each([
+    ['an empty description', { description: '' }],
+    ['a blank description', { description: '   ' }],
+    ['a description over 2000 characters', { description: 'x'.repeat(MAX_DESCRIPTION_LENGTH + 1) }],
+    ['no description', {}],
+    ['a tenant the client picked', { description: 'x', tenantId: SUPPLIER }],
+    ['suppliers the client picked', { description: 'x', suppliers: [] }],
+  ])('rejects %s', (_what, body) => {
+    expect(suggestionRequestSchema.safeParse(body).success).toBe(false);
+  });
+});
+
+describe('suggestionSchema', () => {
+  const suggestion = {
+    title: '20 laptops for new sales hires',
+    category: 'hardware',
+    quantity: 20,
+    amountCents: 2_400_000,
+    currency: 'EUR',
+    supplierId: 'a0000000-0000-4000-8000-000000000202',
+  };
+
+  it('accepts a full suggestion, and null for every field the description lacks', () => {
+    expect(suggestionSchema.parse(suggestion)).toEqual(suggestion);
+    const empty = {
+      ...suggestion,
+      quantity: null,
+      amountCents: null,
+      currency: null,
+      supplierId: null,
+    };
+    expect(suggestionSchema.parse(empty)).toEqual(empty);
+  });
+
+  // The real provider sends this schema to the model as JSON Schema. A default or a
+  // transform would make that conversion fail or differ from what the API accepts.
+  it('converts to a strict JSON Schema with every field required', () => {
+    const json = z.toJSONSchema(suggestionSchema) as {
+      additionalProperties: boolean;
+      required: string[];
+    };
+    expect(json.additionalProperties).toBe(false);
+    expect([...json.required].sort()).toEqual(
+      ['amountCents', 'category', 'currency', 'quantity', 'supplierId', 'title'].sort(),
+    );
+  });
+
+  // Spec criterion 11(f): what the model may get wrong is a schema failure, not a suggestion.
+  it.each([
+    ['a string, not an object', 'not json'],
+    ['null', null],
+    ['a quantity of 0', { ...suggestion, quantity: 0 }],
+    ['a fractional amount', { ...suggestion, amountCents: 1.5 }],
+    ['a lowercase currency', { ...suggestion, currency: 'eur' }],
+    ['a category outside the list', { ...suggestion, category: 'furniture' }],
+    ['a supplier id that is no UUID', { ...suggestion, supplierId: 'Nordic Laptops' }],
+    ['an empty title', { ...suggestion, title: '  ' }],
+    ['a missing field', { title: 'x', category: 'other' }],
+    ['an extra field', { ...suggestion, tenantId: SUPPLIER }],
+  ])('rejects %s', (_what, output) => {
+    expect(suggestionSchema.safeParse(output).success).toBe(false);
+  });
+});
+
+describe('suggestionResponseSchema', () => {
+  it('accepts no suggestion', () => {
+    expect(suggestionResponseSchema.parse({ suggestion: null })).toEqual({ suggestion: null });
+  });
+
+  it('refuses a body without the suggestion key', () => {
+    expect(suggestionResponseSchema.safeParse({}).success).toBe(false);
   });
 });

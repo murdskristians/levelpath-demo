@@ -9,3 +9,13 @@ export type PurchaseRequestStatus = (typeof PURCHASE_REQUEST_STATUSES)[number];
 
 export const APPROVAL_DECISIONS = ['approved', 'rejected'] as const;
 export type ApprovalDecision = (typeof APPROVAL_DECISIONS)[number];
+
+export const PURCHASE_REQUEST_CATEGORIES = [
+  'hardware',
+  'software',
+  'office_supplies',
+  'services',
+  'travel',
+  'other',
+] as const;
+export type PurchaseRequestCategory = (typeof PURCHASE_REQUEST_CATEGORIES)[number];

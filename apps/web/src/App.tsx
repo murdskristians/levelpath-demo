@@ -100,6 +100,8 @@ function Dashboard({ userId, picker }: { userId: string; picker: ReactNode }) {
             <NewRequestForm
               suppliers={suppliers}
               onCreate={create}
+              // Not through `run`: a failed suggestion is the form's note, never the ErrorAlert.
+              onSuggest={(description) => api.suggest(description)}
               onCancel={() => setFormOpen(false)}
             />
           ) : (

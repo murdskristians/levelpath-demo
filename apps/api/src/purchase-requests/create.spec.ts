@@ -1,5 +1,10 @@
 import type { INestApplication } from '@nestjs/common';
-import { apiErrorSchema, MAX_AMOUNT_CENTS, purchaseRequestSchema } from '@levelpath/shared';
+import {
+  apiErrorSchema,
+  MAX_AMOUNT_CENTS,
+  MAX_DESCRIPTION_LENGTH,
+  purchaseRequestSchema,
+} from '@levelpath/shared';
 import type pg from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
@@ -13,6 +18,7 @@ import {
 // Spec criteria 3, 4 and 5, over real HTTP against this run's database: POST
 // /purchase-requests creates a draft for the caller, validates the body with the shared
 // schema, and answers 404 for a supplier the caller's company doesn't have.
+// Phase 4 criteria 3 and 4: the category and the description.
 
 const A = SEED.acme;
 const B = SEED.globex;
@@ -49,7 +55,7 @@ async function requestCount(): Promise<number> {
   return rows[0].n;
 }
 
-const valid = { title: 'x', amountCents: 100, supplierId: A.suppliers[0] };
+const valid = { title: 'x', amountCents: 100, supplierId: A.suppliers[0], category: 'other' };
 
 describe('POST /purchase-requests, happy path (criterion 3)', () => {
   it('creates a draft for the caller, at the largest amount', async () => {
@@ -57,6 +63,8 @@ describe('POST /purchase-requests, happy path (criterion 3)', () => {
       title: '  Test chairs  ',
       amountCents: MAX_AMOUNT_CENTS,
       supplierId: A.suppliers[0],
+      category: 'office_supplies',
+      description: '  For the new meeting room  ',
     });
     expect(res.status).toBe(201);
     const created = purchaseRequestSchema.parse(JSON.parse(res.text));
@@ -66,6 +74,8 @@ describe('POST /purchase-requests, happy path (criterion 3)', () => {
       amountCents: 10_000_000_000,
       currency: 'EUR',
       status: 'draft',
+      category: 'office_supplies',
+      description: 'For the new meeting room',
       supplier: { id: A.suppliers[0], name: 'Bright Office Supplies' },
       requester: { id: A.requester, name: 'Alice' },
       createdAt: expect.any(String),
@@ -76,7 +86,7 @@ describe('POST /purchase-requests, happy path (criterion 3)', () => {
     expect([...A.purchaseRequests, ...B.purchaseRequests]).not.toContain(created.id);
 
     const { rows } = await owner.query(
-      'select tenant_id, requester_id, amount_cents, status from purchase_requests where id = $1',
+      'select tenant_id, requester_id, amount_cents, status, category, description from purchase_requests where id = $1',
       [created.id],
     );
     expect(rows).toEqual([
@@ -85,8 +95,36 @@ describe('POST /purchase-requests, happy path (criterion 3)', () => {
         requester_id: A.requester,
         amount_cents: '10000000000',
         status: 'draft',
+        category: 'office_supplies',
+        description: 'For the new meeting room',
       },
     ]);
+  });
+
+  it('stores the category and trimmed description (Phase 4 criterion 3)', async () => {
+    const res = await create(A.requester, {
+      title: 'Laptops',
+      amountCents: 100,
+      supplierId: A.suppliers[1],
+      category: 'hardware',
+      description: '  For the new sales hires  ',
+    });
+    expect(res.status).toBe(201);
+    expect(purchaseRequestSchema.parse(JSON.parse(res.text))).toMatchObject({
+      category: 'hardware',
+      description: 'For the new sales hires',
+    });
+  });
+
+  it('stores an empty description when it is left out (Phase 4 criterion 3)', async () => {
+    const res = await create(A.requester, valid);
+    expect(res.status).toBe(201);
+    const created = purchaseRequestSchema.parse(JSON.parse(res.text));
+    expect(created.description).toBe('');
+    const { rows } = await owner.query('select description from purchase_requests where id = $1', [
+      created.id,
+    ]);
+    expect(rows).toEqual([{ description: '' }]);
   });
 
   it('keeps a currency the caller gives', async () => {
@@ -109,6 +147,13 @@ describe('POST /purchase-requests, invalid body: 400 with issues (criterion 4)',
     ['a fractional amount', { ...valid, amountCents: 1.5 }, 'amountCents'],
     ['a supplierId that is not a UUID', { ...valid, supplierId: 'not-a-uuid' }, 'supplierId'],
     ['no body at all', undefined, ''],
+    ['no category', { title: 'x', amountCents: 100, supplierId: A.suppliers[0] }, 'category'],
+    ['a category not in the list', { ...valid, category: 'furniture' }, 'category'],
+    [
+      'a description over the cap',
+      { ...valid, description: 'x'.repeat(MAX_DESCRIPTION_LENGTH + 1) },
+      'description',
+    ],
   ];
 
   it.each(cases)('rejects %s, and inserts nothing', async (_name, body, path) => {

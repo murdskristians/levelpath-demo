@@ -1,18 +1,32 @@
-import { createPurchaseRequestSchema, type Supplier } from '@levelpath/shared';
+import {
+  createPurchaseRequestSchema,
+  MAX_DESCRIPTION_LENGTH,
+  type CreatePurchaseRequestInput,
+  type Suggestion,
+  type SuggestionResponse,
+  type Supplier,
+} from '@levelpath/shared';
 import { useState, type FormEvent } from 'react';
-import { parseAmountToCents } from '../money';
+import { CATEGORY_OPTIONS } from '../categories';
+import { centsToAmountText, parseAmountToCents } from '../money';
 
-type Field = 'title' | 'amount' | 'currency' | 'supplier';
+type Field = 'description' | 'title' | 'category' | 'amount' | 'currency' | 'supplier';
 type Errors = Partial<Record<Field, string>>;
+/** The fields a suggestion can fill. Quantity is not shown (spec requirement 21). */
+type SuggestedField = Exclude<Field, 'description'>;
 
 const MESSAGES: Record<Field, string> = {
+  description: `Keep the description to ${MAX_DESCRIPTION_LENGTH} characters or fewer.`,
   title: 'Enter a title of 1 to 200 characters.',
+  category: 'Choose a category.',
   amount: 'Enter an amount of 0 or more, like 12.50.',
   currency: 'Use a three-letter upper-case code, like EUR.',
   supplier: 'Choose a supplier.',
 };
 const FIELD_OF_PATH: Record<string, Field> = {
+  description: 'description',
   title: 'title',
+  category: 'category',
   amountCents: 'amount',
   currency: 'currency',
   supplierId: 'supplier',
@@ -21,22 +35,71 @@ const FIELD_OF_PATH: Record<string, Field> = {
 export function NewRequestForm({
   suppliers,
   onCreate,
+  onSuggest,
   onCancel,
 }: {
   suppliers: Supplier[];
-  onCreate: (input: {
-    title: string;
-    amountCents: number;
-    currency: string;
-    supplierId: string;
-  }) => Promise<void>;
+  onCreate: (input: CreatePurchaseRequestInput) => Promise<void>;
+  onSuggest: (description: string) => Promise<SuggestionResponse>;
   onCancel: () => void;
 }) {
+  const [description, setDescription] = useState('');
   const [title, setTitle] = useState('');
+  const [category, setCategory] = useState('');
   const [amount, setAmount] = useState('');
   const [currency, setCurrency] = useState('EUR');
   const [supplierId, setSupplierId] = useState('');
   const [errors, setErrors] = useState<Errors>({});
+  const [suggesting, setSuggesting] = useState(false);
+  const [suggested, setSuggested] = useState<ReadonlySet<SuggestedField>>(new Set());
+  const [note, setNote] = useState(false);
+
+  /** An edit by the user: the field is theirs again, so its tag goes. */
+  function edited(name: SuggestedField) {
+    setSuggested((tags) => {
+      if (!tags.has(name)) return tags;
+      const next = new Set(tags);
+      next.delete(name);
+      return next;
+    });
+  }
+
+  /** Fills every non-null field and tags it; null fields keep what the user typed (A7). */
+  function apply(s: Suggestion) {
+    const filled: SuggestedField[] = ['title', 'category'];
+    setTitle(s.title);
+    setCategory(s.category);
+    if (s.amountCents !== null) {
+      setAmount(centsToAmountText(s.amountCents));
+      filled.push('amount');
+    }
+    if (s.currency !== null) {
+      setCurrency(s.currency);
+      filled.push('currency');
+    }
+    // The API already drops another tenant's id; this form only offers its own list.
+    if (s.supplierId !== null && suppliers.some((x) => x.id === s.supplierId)) {
+      setSupplierId(s.supplierId);
+      filled.push('supplier');
+    }
+    setSuggested((tags) => new Set([...tags, ...filled]));
+  }
+
+  async function handleSuggest() {
+    setSuggesting(true);
+    setNote(false);
+    try {
+      const { suggestion } = await onSuggest(description);
+      if (suggestion) apply(suggestion);
+      else setNote(true); // The API fell back and logged why.
+    } catch (err) {
+      // Network, non-2xx or a body that fails the schema: the note, not the ErrorAlert.
+      console.error('suggestion failed', err);
+      setNote(true);
+    } finally {
+      setSuggesting(false);
+    }
+  }
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -48,6 +111,8 @@ export function NewRequestForm({
       amountCents: cents ?? 0,
       currency,
       supplierId,
+      category,
+      description,
     });
     if (!result.success) {
       for (const issue of result.error.issues) {
@@ -61,11 +126,26 @@ export function NewRequestForm({
   }
 
   function aria(name: Field) {
+    const ids = [
+      errors[name] ? `${name}-error` : null,
+      name !== 'description' && suggested.has(name) ? `${name}-suggested` : null,
+    ].filter(Boolean);
     return {
       'aria-invalid': errors[name] ? true : undefined,
-      'aria-describedby': errors[name] ? `${name}-error` : undefined,
+      'aria-describedby': ids.length > 0 ? ids.join(' ') : undefined,
     };
   }
+  /** The label, then the tag outside it, so the label's text stays the field's name. */
+  const head = (name: SuggestedField, text: string) => (
+    <div className="field-head">
+      <label htmlFor={name}>{text}</label>
+      {suggested.has(name) && (
+        <span className="suggested-tag" id={`${name}-suggested`}>
+          Suggested
+        </span>
+      )}
+    </div>
+  );
   const message = (name: Field) =>
     errors[name] ? (
       <p id={`${name}-error`} className="field-error">
@@ -76,42 +156,99 @@ export function NewRequestForm({
   return (
     <form onSubmit={handleSubmit} noValidate className="request-form" aria-label="New request">
       <div className="form-field">
-        <label htmlFor="title">Title</label>
+        <label htmlFor="description">Description</label>
+        <textarea
+          id="description"
+          maxLength={MAX_DESCRIPTION_LENGTH}
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          {...aria('description')}
+        />
+        {message('description')}
+      </div>
+      <div className="suggest-row">
+        <button
+          type="button"
+          className="secondary"
+          disabled={description.trim() === '' || suggesting}
+          onClick={() => void handleSuggest()}
+        >
+          {suggesting ? 'Suggesting…' : 'Suggest fields'}
+        </button>
+        {/* Always in the page, so screen readers announce the note when it appears. */}
+        <p role="status" className="form-note">
+          {note ? 'No suggestion this time. Fill in the fields yourself.' : ''}
+        </p>
+      </div>
+      <div className="form-field">
+        {head('title', 'Title')}
         <input
           id="title"
           value={title}
-          onChange={(e) => setTitle(e.target.value)}
+          onChange={(e) => {
+            setTitle(e.target.value);
+            edited('title');
+          }}
           {...aria('title')}
         />
         {message('title')}
       </div>
       <div className="form-field">
-        <label htmlFor="amount">Amount</label>
+        {head('category', 'Category')}
+        <select
+          id="category"
+          value={category}
+          onChange={(e) => {
+            setCategory(e.target.value);
+            edited('category');
+          }}
+          {...aria('category')}
+        >
+          <option value="">Choose a category</option>
+          {CATEGORY_OPTIONS.map((c) => (
+            <option key={c.value} value={c.value}>
+              {c.label}
+            </option>
+          ))}
+        </select>
+        {message('category')}
+      </div>
+      <div className="form-field">
+        {head('amount', 'Amount')}
         <input
           id="amount"
           inputMode="decimal"
           value={amount}
-          onChange={(e) => setAmount(e.target.value)}
+          onChange={(e) => {
+            setAmount(e.target.value);
+            edited('amount');
+          }}
           {...aria('amount')}
         />
         {message('amount')}
       </div>
       <div className="form-field">
-        <label htmlFor="currency">Currency</label>
+        {head('currency', 'Currency')}
         <input
           id="currency"
           value={currency}
-          onChange={(e) => setCurrency(e.target.value)}
+          onChange={(e) => {
+            setCurrency(e.target.value);
+            edited('currency');
+          }}
           {...aria('currency')}
         />
         {message('currency')}
       </div>
       <div className="form-field">
-        <label htmlFor="supplier">Supplier</label>
+        {head('supplier', 'Supplier')}
         <select
           id="supplier"
           value={supplierId}
-          onChange={(e) => setSupplierId(e.target.value)}
+          onChange={(e) => {
+            setSupplierId(e.target.value);
+            edited('supplier');
+          }}
           {...aria('supplier')}
         >
           <option value="">Choose a supplier</option>

@@ -50,7 +50,12 @@ async function submittedBy(userId: string = A.requester): Promise<PurchaseReques
   const created = await fetch(`${url}/purchase-requests`, {
     method: 'POST',
     headers: { 'X-User-Id': userId, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ title: 'Decision test', amountCents: 1000, supplierId: A.suppliers[0] }),
+    body: JSON.stringify({
+      title: 'Decision test',
+      amountCents: 1000,
+      supplierId: A.suppliers[0],
+      category: 'other',
+    }),
   });
   expect(created.status).toBe(201);
   const { id } = purchaseRequestSchema.parse(await created.json());

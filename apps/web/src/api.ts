@@ -1,6 +1,7 @@
 import {
   apiErrorSchema,
   purchaseRequestSchema,
+  suggestionResponseSchema,
   supplierSchema,
   type CreatePurchaseRequestInput,
   type DecisionInput,
@@ -78,6 +79,8 @@ export function createApi(userId: string) {
     submit: (id: string) => call('POST', `/purchase-requests/${id}/submit`, purchaseRequestSchema),
     decide: (id: string, input: DecisionInput) =>
       call('POST', `/purchase-requests/${id}/decision`, purchaseRequestSchema, input),
+    suggest: (description: string) =>
+      call('POST', '/purchase-requests/suggestion', suggestionResponseSchema, { description }),
   };
 }
 export type Api = ReturnType<typeof createApi>;
