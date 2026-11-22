@@ -74,6 +74,7 @@ export class AnthropicProvider implements SuggestionProvider {
     }
     // Thinking blocks come first; the answer is the first text block.
     const block = message.content.find((b) => b.type === 'text');
+    // No text block: null fails suggestionSchema, so the service repairs it like bad JSON.
     if (!block || block.type !== 'text') return null;
     try {
       return JSON.parse(block.text) as unknown;

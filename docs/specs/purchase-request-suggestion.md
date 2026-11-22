@@ -216,7 +216,7 @@ Setup for the curl checks: `pnpm db:up && pnpm db:migrate && pnpm db:seed && pnp
 - **Prompt injection:** the description is untrusted. It goes inside escaped `<description>` tags in the user message, and the output is schema-validated and supplier-filtered (requirements 15, 18 and 9). At worst an injected text produces an invalid suggestion, which falls back. The eval set includes an injection case.
 - **Secrets:** `ANTHROPIC_API_KEY` comes from the process environment only. It is never logged, printed in errors or committed. Nobody reads or prints `.env`, and `.env.sample` has no value.
 - **Personal data in logs:** one line per call, with lengths and a hash, never the description or raw output (requirement 19, criterion 12).
-- **Cost and availability:** at most 2 provider calls and 15 seconds per click, with no SDK retries. Tests and CI use the mock only. Evals spend tokens only when the API under test was started with `LLM_PROVIDER=anthropic`, and Claude asks Chris before every such run.
+- **Cost and availability:** at most 2 provider calls and 15 seconds per click, with no SDK retries. Tests and CI use the mock only. Evals spend tokens only when the API under test was started with `LLM_PROVIDER=anthropic`, and Claude asks Chris before every such run. There is no per-user rate limit (out of scope), so under `pnpm dev:llm` any seeded user can run up paid calls. That is acceptable for a local demo; production needs a per-user limit on this route.
 - **Output in the UI:** the description is rendered as React text, never as HTML (criterion 19).
 - `X-User-Id` is still the dev stub, not authentication.
 

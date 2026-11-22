@@ -94,6 +94,7 @@ export function NewRequestForm({
       else setNote(true); // The API fell back and logged why.
     } catch (err) {
       // Network, non-2xx or a body that fails the schema: the note, not the ErrorAlert.
+      // Deliberate, not a leftover: the note hides the cause, so the console keeps it.
       console.error('suggestion failed', err);
       setNote(true);
     } finally {
