@@ -63,6 +63,14 @@ describe('MockProvider rules', () => {
     ['3 chairs at £9.99 per chair', 3, 2_997, 'GBP'],
     ['2 laptops, €1,234,567.5 total', 2, 123_456_750, 'EUR'],
     ['5 notebooks $2.05 each', 5, 1_025, 'USD'],
+    ['Two laptops, 1,450.00 EUR each', 2, 290_000, 'EUR'],
+    ['twelve pens, USD 3 each', 12, 3_600, 'USD'],
+    ['seven chairs for £70 in total', 7, 7_000, 'GBP'],
+    ['3 chairs, 99 GBP', 3, 9_900, 'GBP'],
+    ['$10 or EUR 12', null, 1_000, 'USD'],
+    ['one laptop and 4 monitors', 1, null, null],
+    ['4 monitors and one laptop', 4, null, null],
+    ['thirteen laptops', null, null, null],
   ])('reads %j as quantity %s, %i cents %s', async (text, quantity, cents, currency) => {
     expect(await suggest(text)).toMatchObject({ quantity, amountCents: cents, currency });
   });
@@ -73,6 +81,10 @@ describe('MockProvider rules', () => {
     ['office cleaning', 'services'],
     ['something else entirely', 'other'],
     ['MONITORS', 'hardware'],
+    ['500 reams of printer paper', 'office_supplies'],
+    ['a new printer for the office', 'hardware'],
+    ['5 docking stations for the new desks', 'hardware'],
+    ['laptops with software', 'software'],
   ])('puts %j in %s', async (text, category) => {
     expect(await suggest(text)).toMatchObject({ category });
   });

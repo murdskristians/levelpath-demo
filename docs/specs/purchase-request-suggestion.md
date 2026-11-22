@@ -72,9 +72,9 @@
     A root script **`pnpm dev:llm`** starts the same stack as `pnpm dev`, except that the API loads `.env` with Node's built-in env-file support (no new dependency) and runs with `LLM_PROVIDER=anthropic`. Chris puts `ANTHROPIC_API_KEY` in `.env` himself. Plain `pnpm dev` and every test still ignore `.env` and use the mock, so the real model never runs by accident (A8).
 
 12. The **`MockProvider`** is deterministic, has no network access and uses fixed rules:
-    - **Category:** a keyword table (`laptop` gives `hardware`, `pen` gives `office_supplies`, and so on), or `other` when no keyword matches.
-    - **Quantity:** the first integer followed by a space and a word, or null.
-    - **Amount and currency:** the first amount written after `€`, `$` or `£`, with `,` as a thousands separator. It gives `EUR`, `USD` or `GBP`. The amount is multiplied by the quantity when the text says `each` or `per`. Without an amount, both are null.
+    - **Category:** a keyword table (`laptop` gives `hardware`, `pen` gives `office_supplies`, and so on), or `other` when no keyword matches. Keywords may be phrases, and the longest one found wins, so `printer paper` gives `office_supplies` while `printer` alone gives `hardware`.
+    - **Quantity:** the first integer, or number word from `one` to `twelve`, followed by a space and a word, or null.
+    - **Amount and currency:** the first amount in the text, written `€1,200`, `EUR 1,200` or `1,200.00 EUR`, with `,` as a thousands separator. The symbols `€`, `$` and `£` and the codes `EUR`, `USD` and `GBP` give `EUR`, `USD` or `GBP`. The amount is multiplied by the quantity when the text says `each` or `per`. Without an amount, both are null.
     - **Supplier:** the first given supplier whose name appears in the description, ignoring case, or null.
     - **Title:** a non-empty title from the description, at most 200 characters.
 

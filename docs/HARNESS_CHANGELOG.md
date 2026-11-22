@@ -515,3 +515,10 @@ Format:
 - **Before:** nothing; found with a scratch package while planning.
 - **After:** `evals/run.mjs` drops one leading `--` before `parseArgs`. Checked: `--api http://localhost:3917` reaches that API, `--api http://localhost:1` exits 1.
 - **Why:** a runner that quietly tests the wrong server reports a pass rate for the wrong thing.
+
+## 2026-11-22: The mock scored 12/15 on the evals
+
+- **What went wrong:** review round 1 (verify, spec) found three eval cases the mock failed: "printer paper" hit the hardware keyword `printer`, "docking stations" had no keyword, and "Two … 1,450.00 EUR" had a quantity in words and a currency code. Round 1's fix documented 12/15 as the expected baseline; Chris then chose to make the mock pass every case instead.
+- **Before:** the mock's first matching category won, quantities were digits only, and amounts needed a currency symbol. A mock eval run always showed three known failures, so a new failure could hide among them.
+- **After:** the longest keyword found wins (`printer paper` and `docking station` are keywords), `one` to `twelve` count as quantities, and `EUR 1,200` and `1,200.00 EUR` are amounts (spec requirement 12, `mock.provider.ts`, new cases in `mock.provider.spec.ts`). `pnpm eval` against the mock gives `15/15 (100%)`.
+- **Why:** with the mock at 100%, any failing case in a mock run is a real regression in the runner, the route or the mock. The cost: a mock run no longer says anything about suggestion quality; only a run against the real model does, which `evals/run.mjs` now says.

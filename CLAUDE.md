@@ -4,18 +4,18 @@ A small multi-tenant purchase-request app (Levelpath interview demo), built **th
 
 ## Commands
 
-| Command                    | Healthy output                                                                                                                                                                  |
-| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `pnpm install`             | `Done in …`                                                                                                                                                                     |
-| `pnpm build`               | `apps/api build: Done`, `apps/web build: ✓ built in …`, exit 0                                                                                                                  |
-| `pnpm lint`                | `All matched files use Prettier code style!`, exit 0 (check only, never fixes)                                                                                                  |
-| `pnpm test`                | `Tests  N passed (N)` for `apps/api` and `apps/web`, exit 0                                                                                                                     |
-| `pnpm db:migrate`          | `levelpath: applied 0001_….sql` per new file, or `levelpath: nothing to apply`                                                                                                  |
-| `pnpm db:seed`             | `levelpath: seeded (Acme Corp and Globex Corp)`, safe to run twice                                                                                                              |
-| `pnpm dev`                 | Postgres `healthy`, `api listening on http://localhost:3000`, Vite on 5173                                                                                                      |
-| `pnpm db:up`               | `Container … Healthy`                                                                                                                                                           |
-| `pnpm eval -- --api <url>` | one `PASS`/`FAIL` line per case, then `pass rate: N/M (P%)`, exit 0; exit 1 if the API can't be reached. Against the mock, `12/15` is the expected baseline (its keyword rules) |
-| `pnpm dev:llm`             | Chris only: `pnpm dev` with the real model (needs `.env` with the key; every Suggest fields click is a paid call)                                                               |
+| Command                    | Healthy output                                                                                                                            |
+| -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `pnpm install`             | `Done in …`                                                                                                                               |
+| `pnpm build`               | `apps/api build: Done`, `apps/web build: ✓ built in …`, exit 0                                                                            |
+| `pnpm lint`                | `All matched files use Prettier code style!`, exit 0 (check only, never fixes)                                                            |
+| `pnpm test`                | `Tests  N passed (N)` for `apps/api` and `apps/web`, exit 0                                                                               |
+| `pnpm db:migrate`          | `levelpath: applied 0001_….sql` per new file, or `levelpath: nothing to apply`                                                            |
+| `pnpm db:seed`             | `levelpath: seeded (Acme Corp and Globex Corp)`, safe to run twice                                                                        |
+| `pnpm dev`                 | Postgres `healthy`, `api listening on http://localhost:3000`, Vite on 5173                                                                |
+| `pnpm db:up`               | `Container … Healthy`                                                                                                                     |
+| `pnpm eval -- --api <url>` | one `PASS`/`FAIL` line per case, then `pass rate: N/M (P%)`, exit 0; exit 1 if the API can't be reached. Against the mock, `15/15 (100%)` |
+| `pnpm dev:llm`             | Chris only: `pnpm dev` with the real model (needs `.env` with the key; every Suggest fields click is a paid call)                         |
 
 **The API tests need Postgres up** (`pnpm db:up`). Each run creates its own `lp_<random>` database, migrates and seeds it, and drops it; without Postgres they fail and say so.
 

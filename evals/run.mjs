@@ -7,11 +7,11 @@
 // LLM_PROVIDER=anthropic (`pnpm dev:llm`): ask Chris before every such run.
 // It reports the pass rate and exits 0 whatever the rate; 1 only when it can't run.
 //
-// Against the mock (`pnpm dev`), 12/15 is the expected baseline, not a failure. The mock
-// follows fixed keyword rules (spec requirement 12), and the cases are written for the
-// real model: "printer paper" hits the hardware keyword, "docking stations" has no keyword,
-// and "Two … 1,450.00 EUR" has no digit quantity and no currency symbol. Don't tune the
-// mock or the cases to reach 15/15: the real model's rate is the number that matters.
+// Against the mock (`pnpm dev`), every case passes: the mock's fixed rules (spec requirement
+// 12) were extended to cover them (phrase keywords, number words, currency codes). So a
+// mock run checks the runner and the route end to end, not suggestion quality. A case the
+// mock fails is a bug in the mock or the case. The real model's rate is the number that
+// says how good the suggestions are.
 
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
