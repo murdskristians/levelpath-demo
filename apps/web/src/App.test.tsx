@@ -146,10 +146,18 @@ describe('App', () => {
       expect(within(items[0]).getByText(/Other/)).toBeTruthy();
       expect(within(items[1]).getByText(/Office supplies/)).toBeTruthy();
       expect(within(items[0]).getByText('Draft')).toBeTruthy();
-      expect(within(items[0]).getByRole('button', { name: 'Submit' })).toBeTruthy();
+      expect(within(items[0]).getByRole('button', { name: 'Submit Laptops' })).toBeTruthy();
       expect(within(items[1]).getByText('Rejected')).toBeTruthy();
       expect(within(items[1]).getByText(/too dear/)).toBeTruthy();
-      expect(within(items[1]).queryByRole('button', { name: 'Submit' })).toBeNull();
+      expect(within(items[1]).queryByRole('button', { name: 'Submit Chairs' })).toBeNull();
+    });
+
+    it('names the Submit button after its request, keeping the visible text', async () => {
+      mockFetch(base(ALICE, { 'GET /purchase-requests/mine': [purchaseRequest()] }));
+      renderAs(ALICE);
+
+      const button = await screen.findByRole('button', { name: 'Submit Laptops' });
+      expect(button.textContent).toBe('Submit');
     });
 
     it('shows an empty state', async () => {
@@ -172,13 +180,13 @@ describe('App', () => {
       );
       renderAs(ALICE);
 
-      fireEvent.click(await screen.findByRole('button', { name: 'Submit' }));
+      fireEvent.click(await screen.findByRole('button', { name: 'Submit Laptops' }));
       await screen.findByText('Submitted');
       const post = m.calls.find((c) => c.method === 'POST')!;
       expect(post.url).toBe(`/api/purchase-requests/${ID(1)}/submit`);
       expect(post.headers['X-User-Id']).toBe(ALICE);
       expect(m.count('GET', '/purchase-requests/mine')).toBe(2);
-      expect(screen.queryByRole('button', { name: 'Submit' })).toBeNull();
+      expect(screen.queryByRole('button', { name: 'Submit Laptops' })).toBeNull();
     });
   });
 
@@ -194,6 +202,19 @@ describe('App', () => {
       fireEvent.click(screen.getByRole('button', { name: 'New request' }));
       return m;
     }
+    it('puts the form above the list and focuses Title', async () => {
+      mockFetch(base(ALICE, { 'GET /purchase-requests/mine': [purchaseRequest()] }));
+      renderAs(ALICE);
+      await screen.findByText('Laptops');
+      fireEvent.click(screen.getByRole('button', { name: 'New request' }));
+
+      const title = screen.getByLabelText('Title');
+      expect(document.activeElement).toBe(title);
+      const form = screen.getByRole('form', { name: 'New request' });
+      const list = screen.getByRole('list');
+      expect(form.compareDocumentPosition(list) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    });
+
     const fill = (label: string, value: string) =>
       fireEvent.change(screen.getByLabelText(label), { target: { value } });
     const posts = (m: Awaited<ReturnType<typeof openForm>>) =>
@@ -521,11 +542,32 @@ describe('App', () => {
       );
       renderAs(AMIR);
 
-      fireEvent.click(await screen.findByRole('button', { name: 'Approve' }));
+      fireEvent.click(await screen.findByRole('button', { name: 'Approve Monitors' }));
       await waitFor(() => expect(m.count('GET', '/purchase-requests/to-decide')).toBe(2));
       const post = m.calls.find((c) => c.method === 'POST')!;
       expect(post.url).toBe(`/api/purchase-requests/${ID(5)}/decision`);
       expect(post.body).toEqual({ decision: 'approved', comment: '' });
+    });
+
+    it('names each decision button after its request', async () => {
+      const second = purchaseRequest({ id: ID(6), title: 'Chairs', status: 'submitted' });
+      mockFetch(base(AMIR, { 'GET /purchase-requests/to-decide': [waiting, second] }));
+      renderAs(AMIR);
+
+      const approve = await screen.findByRole('button', { name: 'Approve Monitors' });
+      const reject = screen.getByRole('button', { name: 'Reject Monitors' });
+      expect(approve.textContent).toBe('Approve');
+      expect(reject.textContent).toBe('Reject');
+      expect(screen.getByRole('button', { name: 'Approve Chairs' })).not.toBe(approve);
+      expect(screen.getByRole('button', { name: 'Reject Chairs' })).not.toBe(reject);
+    });
+
+    it('does not show the old lowercase rejection message', async () => {
+      mockFetch(base(AMIR, { 'GET /purchase-requests/to-decide': [waiting] }));
+      renderAs(AMIR);
+
+      fireEvent.click(await screen.findByRole('button', { name: 'Reject Monitors' }));
+      expect(screen.queryByText('a rejection needs a comment')).toBeNull();
     });
 
     it('blocks a rejection without a comment, and sends one with a comment', async () => {
@@ -537,14 +579,14 @@ describe('App', () => {
       );
       renderAs(AMIR);
 
-      fireEvent.click(await screen.findByRole('button', { name: 'Reject' }));
-      expect(screen.getByText('a rejection needs a comment')).toBeTruthy();
+      fireEvent.click(await screen.findByRole('button', { name: 'Reject Monitors' }));
+      expect(screen.getByText('A rejection needs a comment.')).toBeTruthy();
       expect(m.calls.some((c) => c.method === 'POST')).toBe(false);
 
       fireEvent.change(screen.getByLabelText('Comment on Monitors'), {
         target: { value: 'too dear' },
       });
-      fireEvent.click(screen.getByRole('button', { name: 'Reject' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Reject Monitors' }));
       await waitFor(() => expect(m.calls.some((c) => c.method === 'POST')).toBe(true));
       expect(m.calls.find((c) => c.method === 'POST')!.body).toEqual({
         decision: 'rejected',
@@ -566,7 +608,7 @@ describe('App', () => {
       );
       renderAs(ALICE);
 
-      fireEvent.click(await screen.findByRole('button', { name: 'Submit' }));
+      fireEvent.click(await screen.findByRole('button', { name: 'Submit Laptops' }));
       expect((await screen.findByRole('alert')).textContent).toContain('not a draft');
       expect(screen.getByText('Laptops')).toBeTruthy();
     });
@@ -584,7 +626,7 @@ describe('App', () => {
       );
       renderAs(ALICE);
 
-      fireEvent.click(await screen.findByRole('button', { name: 'Submit' }));
+      fireEvent.click(await screen.findByRole('button', { name: 'Submit Laptops' }));
       expect((await screen.findByRole('alert')).textContent).toContain('title: bad title');
     });
 

@@ -43,10 +43,19 @@ function DecisionItem({ request, onDecide }: { request: PurchaseRequest; onDecid
         </p>
       )}
       <div className="form-actions">
-        <button type="button" onClick={() => decide('approved')}>
+        <button
+          type="button"
+          aria-label={`Approve ${request.title}`}
+          onClick={() => decide('approved')}
+        >
           Approve
         </button>
-        <button type="button" className="secondary" onClick={() => decide('rejected')}>
+        <button
+          type="button"
+          className="secondary"
+          aria-label={`Reject ${request.title}`}
+          onClick={() => decide('rejected')}
+        >
           Reject
         </button>
       </div>

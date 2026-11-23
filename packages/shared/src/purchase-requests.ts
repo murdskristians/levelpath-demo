@@ -55,7 +55,7 @@ export const decisionSchema = z
   })
   .refine((d) => d.decision === 'approved' || d.comment.length > 0, {
     path: ['comment'],
-    message: 'a rejection needs a comment',
+    message: 'A rejection needs a comment.',
   });
 export type DecisionInput = z.input<typeof decisionSchema>;
 export type Decision = z.output<typeof decisionSchema>;
