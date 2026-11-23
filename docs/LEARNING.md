@@ -212,3 +212,9 @@ One entry per new concept: what it is, why it matters, where it lives in this re
 - **What:** Each suggestion writes one JSON line: provider, model, latency, attempts, validation failures, outcome, reason, error class, and the description's length and the first 12 hex characters of its SHA-256. Never the description, the model's output, `err.message`, a key or a name.
 - **Why it matters:** A purchase description can hold names, prices or anything a user pastes. The hash still lets you see that the same text failed three times, and the length and latency explain most problems, without the log becoming a second copy of user data.
 - **Where:** the `llm_suggestion` line at the end of `suggest` in [suggestions.service.ts](../apps/api/src/suggestions/suggestions.service.ts); the log tests in [suggestions.service.spec.ts](../apps/api/src/suggestions/suggestions.service.spec.ts).
+
+## Theme variables and `data-theme` (light/dark toggle)
+
+- **What:** Every colour in `App.css` is a CSS custom property. `:root` holds the light values, `:root[data-theme='dark']` the dark ones, and `useTheme` sets `data-theme` on `<html>`. The first visit follows `prefers-color-scheme`; a click saves `light` or `dark` in `localStorage`, and a saved value wins.
+- **Why it matters:** Switching a set of variables recolours the whole page without touching a single rule, and one attribute is the only state CSS needs. The saved value is checked against the two allowed strings, and a blocked `localStorage` only logs a warning, so a preference never breaks the app.
+- **Where:** [theme.ts](../apps/web/src/theme.ts), [ThemeToggle.tsx](../apps/web/src/components/ThemeToggle.tsx), [App.css](../apps/web/src/App.css).
