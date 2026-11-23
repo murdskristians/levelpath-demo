@@ -14,3 +14,9 @@ export function parseAmountToCents(text: string): number | null {
   const cents = Number(match[1]) * 100 + Number((match[2] ?? '').padEnd(2, '0'));
   return Number.isSafeInteger(cents) ? cents : null;
 }
+
+/** 2400000 to "24000.00", the text parseAmountToCents reads back. String digits, no float. */
+export function centsToAmountText(cents: number): string {
+  const digits = String(cents).padStart(3, '0');
+  return `${digits.slice(0, -2)}.${digits.slice(-2)}`;
+}

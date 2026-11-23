@@ -33,7 +33,7 @@ describe('createApi', () => {
       }),
     });
     const err = await createApi(ALICE)
-      .createRequest({ title: 'x', amountCents: 1, supplierId: ALICE })
+      .createRequest({ title: 'x', amountCents: 1, supplierId: ALICE, category: 'other' })
       .then(
         () => null,
         (e: unknown) => e as ApiRequestError,
@@ -56,6 +56,22 @@ describe('createApi', () => {
       );
     expect(err?.status).toBe(502);
     expect(err?.message).toBe('Bad Gateway');
+  });
+
+  it('posts the description for a suggestion and parses the answer (Phase 4)', async () => {
+    const m = mockFetch({ 'POST /purchase-requests/suggestion': { suggestion: null } });
+    expect(await createApi(ALICE).suggest('need pens')).toEqual({ suggestion: null });
+    expect(m.calls[0]).toMatchObject({
+      method: 'POST',
+      url: '/api/purchase-requests/suggestion',
+      body: { description: 'need pens' },
+    });
+  });
+
+  it('rejects a suggestion answer with extra keys: the schema is strict', async () => {
+    mockFetch({ 'POST /purchase-requests/suggestion': { suggestion: null, debug: 'x' } });
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    await expect(createApi(ALICE).suggest('need pens')).rejects.toBeInstanceOf(ApiRequestError);
   });
 
   it('wraps a network failure', async () => {

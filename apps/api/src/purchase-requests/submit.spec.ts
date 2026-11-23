@@ -44,7 +44,12 @@ async function createAs(userId: string): Promise<PurchaseRequest> {
   const res = await fetch(`${url}/purchase-requests`, {
     method: 'POST',
     headers: { 'X-User-Id': userId, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ title: 'Submit test', amountCents: 1000, supplierId: A.suppliers[0] }),
+    body: JSON.stringify({
+      title: 'Submit test',
+      amountCents: 1000,
+      supplierId: A.suppliers[0],
+      category: 'other',
+    }),
   });
   expect(res.status).toBe(201);
   return purchaseRequestSchema.parse(await res.json());

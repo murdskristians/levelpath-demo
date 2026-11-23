@@ -121,6 +121,7 @@ describe('App', () => {
         id: ID(2),
         title: 'Chairs',
         status: 'rejected',
+        category: 'office_supplies',
         decision: {
           decision: 'rejected',
           comment: 'too dear',
@@ -142,6 +143,8 @@ describe('App', () => {
       );
       expect(within(items[0]).getByText(new RegExp(expected.replace('€', '\\€')))).toBeTruthy();
       expect(within(items[0]).getByText(/Dell/)).toBeTruthy();
+      expect(within(items[0]).getByText(/Other/)).toBeTruthy();
+      expect(within(items[1]).getByText(/Office supplies/)).toBeTruthy();
       expect(within(items[0]).getByText('Draft')).toBeTruthy();
       expect(within(items[0]).getByRole('button', { name: 'Submit' })).toBeTruthy();
       expect(within(items[1]).getByText('Rejected')).toBeTruthy();
@@ -213,9 +216,11 @@ describe('App', () => {
       ['Amount', 'abc', 'amount'],
       ['Title', 'x'.repeat(201), 'title'],
       ['Currency', 'eur', 'currency'],
+      ['Description', 'x'.repeat(2001), 'description'],
     ])('rejects %s = %s next to its own field', async (label, value, id) => {
       const m = await openForm();
       fill('Title', 'Laptops');
+      fill('Category', 'hardware');
       fill('Amount', '12.34');
       fill('Supplier', supplier().id);
       fill(label, value);
@@ -228,7 +233,9 @@ describe('App', () => {
 
     it('posts the converted values, closes the form and re-fetches', async () => {
       const m = await openForm();
+      fill('Description', '  For the new sales hires  ');
       fill('Title', 'Laptops');
+      fill('Category', 'hardware');
       fill('Amount', '12.34');
       fill('Supplier', supplier().id);
       fireEvent.click(screen.getByRole('button', { name: 'Create request' }));
@@ -237,7 +244,8 @@ describe('App', () => {
       expect(posts(m)).toHaveLength(1);
       expect(posts(m)[0].url).toBe('/api/purchase-requests');
       expect(JSON.stringify(posts(m)[0].body)).toBe(
-        `{"title":"Laptops","amountCents":1234,"currency":"EUR","supplierId":"${supplier().id}"}`,
+        `{"title":"Laptops","amountCents":1234,"currency":"EUR","supplierId":"${supplier().id}",` +
+          `"category":"hardware","description":"For the new sales hires"}`,
       );
       await waitFor(() => expect(m.count('GET', '/purchase-requests/mine')).toBe(2));
     });
@@ -248,6 +256,7 @@ describe('App', () => {
     ])('sends %s as %i cents', async (text, cents) => {
       const m = await openForm();
       fill('Title', 'Pens');
+      fill('Category', 'office_supplies');
       fill('Amount', text);
       fill('Supplier', supplier().id);
       fireEvent.click(screen.getByRole('button', { name: 'Create request' }));
@@ -256,11 +265,209 @@ describe('App', () => {
       expect((posts(m)[0].body as { amountCents: number }).amountCents).toBe(cents);
     });
 
+    it('shows Description, Title, Category, Amount, Currency and Supplier, in that order (Phase 4 criterion 16)', async () => {
+      await openForm();
+      const form = screen.getByRole('form', { name: 'New request' });
+      expect([...form.querySelectorAll('label')].map((l) => l.textContent)).toEqual([
+        'Description',
+        'Title',
+        'Category',
+        'Amount',
+        'Currency',
+        'Supplier',
+      ]);
+      const options = within(screen.getByLabelText('Category')).getAllByRole('option');
+      expect(options.map((o) => o.textContent)).toEqual([
+        'Choose a category',
+        'Hardware',
+        'Software',
+        'Office supplies',
+        'Services',
+        'Travel',
+        'Other',
+      ]);
+      expect(screen.getByLabelText('Description').getAttribute('maxlength')).toBe('2000');
+    });
+
+    it('asks for a category and sends nothing without one (Phase 4 criterion 16)', async () => {
+      const m = await openForm();
+      fill('Title', 'Laptops');
+      fill('Amount', '12.34');
+      fill('Supplier', supplier().id);
+      fireEvent.click(screen.getByRole('button', { name: 'Create request' }));
+
+      const category = screen.getByLabelText('Category');
+      expect(category.getAttribute('aria-invalid')).toBe('true');
+      expect(document.getElementById(category.getAttribute('aria-describedby')!)?.textContent).toBe(
+        'Choose a category.',
+      );
+      expect(document.querySelectorAll('.field-error')).toHaveLength(1);
+      expect(posts(m)).toHaveLength(0);
+    });
+
     it('closes on Cancel', async () => {
       await openForm();
       fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
       expect(screen.queryByLabelText('Title')).toBeNull();
     });
+  });
+
+  describe('suggest fields (Phase 4)', () => {
+    const HAPPY = 'need 20 laptops for new sales hires, ~€1,200 each, prefer Nordic Laptops';
+    const NORDIC = supplier({ id: ID(901), name: 'Nordic Laptops' });
+    const SUGGESTION = {
+      title: 'Laptops for new sales hires',
+      category: 'hardware',
+      quantity: 20,
+      amountCents: 2_400_000,
+      currency: 'EUR',
+      supplierId: NORDIC.id,
+    };
+    const ROUTE = 'POST /purchase-requests/suggestion';
+    const FIELDS = ['title', 'category', 'amount', 'currency', 'supplier'];
+
+    async function openForm(reply: unknown) {
+      const m = mockFetch(
+        base(ALICE, {
+          'GET /suppliers': [supplier(), NORDIC],
+          [ROUTE]: reply,
+          'POST /purchase-requests': purchaseRequest({ category: 'hardware' }),
+        }),
+      );
+      renderAs(ALICE);
+      await screen.findByText('No purchase requests yet.');
+      fireEvent.click(screen.getByRole('button', { name: 'New request' }));
+      await screen.findByRole('option', { name: 'Nordic Laptops' });
+      return m;
+    }
+    const fill = (label: string, value: string) =>
+      fireEvent.change(screen.getByLabelText(label), { target: { value } });
+    const value = (label: string) => (screen.getByLabelText(label) as HTMLInputElement).value;
+    const button = () => screen.getByRole('button', { name: /Suggest/ }) as HTMLButtonElement;
+    const suggestions = (m: Awaited<ReturnType<typeof openForm>>) =>
+      m.count('POST', '/purchase-requests/suggestion');
+    const tagged = () =>
+      [...document.querySelectorAll('.suggested-tag')].map((t) => t.id.replace('-suggested', ''));
+
+    it('is disabled until the description has text, and typing calls nothing (criteria 16, 17)', async () => {
+      const m = await openForm({ suggestion: SUGGESTION });
+      expect(button().type).toBe('button');
+      expect(button().textContent).toBe('Suggest fields');
+      expect(button().disabled).toBe(true);
+      fill('Description', '   ');
+      expect(button().disabled).toBe(true);
+      fill('Description', HAPPY);
+      expect(button().disabled).toBe(false);
+      expect(suggestions(m)).toBe(0);
+    });
+
+    it('fills and tags five fields with one POST, and creates nothing (criterion 17)', async () => {
+      let release: (v: unknown) => void = () => {};
+      const m = await openForm(() => new Promise((resolve) => (release = resolve)));
+      fill('Description', HAPPY);
+      fireEvent.click(button());
+
+      // In flight: one call, and a disabled button that says so.
+      await waitFor(() => expect(suggestions(m)).toBe(1));
+      expect(button().textContent).toBe('Suggesting…');
+      expect(button().disabled).toBe(true);
+      const post = m.calls.find((c) => c.url === '/api/purchase-requests/suggestion')!;
+      expect(post.body).toEqual({ description: HAPPY });
+      expect(post.headers['X-User-Id']).toBe(ALICE);
+
+      release({ suggestion: SUGGESTION });
+      await screen.findByText('Suggested', { selector: '#title-suggested' });
+      expect(value('Title')).toBe('Laptops for new sales hires');
+      expect(value('Category')).toBe('hardware');
+      expect(value('Amount')).toBe('24000.00');
+      expect(value('Currency')).toBe('EUR');
+      expect(value('Supplier')).toBe(NORDIC.id);
+      expect(tagged()).toEqual(FIELDS);
+      expect(screen.getAllByText('Suggested')).toHaveLength(5);
+      expect(screen.getByLabelText('Title').getAttribute('aria-describedby')).toBe(
+        'title-suggested',
+      );
+      expect(button().textContent).toBe('Suggest fields');
+      expect(screen.getByRole('status').textContent).toBe('');
+
+      // Nothing is created, and the list is not re-fetched, until Create request.
+      expect(suggestions(m)).toBe(1);
+      expect(m.count('POST', '/purchase-requests')).toBe(0);
+      expect(m.count('GET', '/purchase-requests/mine')).toBe(1);
+      expect(screen.getByText('No purchase requests yet.')).toBeTruthy();
+
+      // Editing Title removes only its tag.
+      fill('Title', 'Sales laptops');
+      expect(tagged()).toEqual(['category', 'amount', 'currency', 'supplier']);
+      expect(screen.getByLabelText('Title').getAttribute('aria-describedby')).toBeNull();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Create request' }));
+      await waitFor(() => expect(m.count('POST', '/purchase-requests')).toBe(1));
+      expect(m.calls.find((c) => c.url === '/api/purchase-requests')!.body).toEqual({
+        title: 'Sales laptops',
+        amountCents: 2_400_000,
+        currency: 'EUR',
+        supplierId: NORDIC.id,
+        category: 'hardware',
+        description: HAPPY,
+      });
+      expect(suggestions(m)).toBe(1);
+    });
+
+    it('leaves null fields and an unknown supplier as the user had them (A7)', async () => {
+      await openForm({
+        suggestion: { ...SUGGESTION, amountCents: null, currency: null, supplierId: ID(999) },
+      });
+      fill('Amount', '5');
+      fill('Currency', 'USD');
+      fill('Supplier', supplier().id);
+      fill('Description', 'a box of pens');
+      fireEvent.click(button());
+
+      await screen.findByText('Suggested', { selector: '#title-suggested' });
+      expect(tagged()).toEqual(['title', 'category']);
+      expect([value('Amount'), value('Currency'), value('Supplier')]).toEqual([
+        '5',
+        'USD',
+        supplier().id,
+      ]);
+    });
+
+    const networkFailure = () => {
+      throw new TypeError('offline');
+    };
+    it.each([
+      ['{ suggestion: null }', { suggestion: null }],
+      ['a 500', fail(500, { statusCode: 500, message: 'Internal server error' })],
+      ['a body that fails the schema', { suggestion: { title: '' } }],
+      ['a network failure', networkFailure],
+    ])(
+      'shows the note for %s, keeps every value and shows no alert (criterion 18)',
+      async (_name, reply) => {
+        const m = await openForm(reply);
+        fill('Title', 'Mine');
+        fill('Amount', '5');
+        fill('Description', 'mock:invalid laptops');
+        expect(screen.getByRole('status').textContent).toBe('');
+        fireEvent.click(button());
+
+        await waitFor(() =>
+          expect(screen.getByRole('status').textContent).toBe(
+            'No suggestion this time. Fill in the fields yourself.',
+          ),
+        );
+        expect([value('Title'), value('Category'), value('Amount'), value('Currency')]).toEqual([
+          'Mine',
+          '',
+          '5',
+          'EUR',
+        ]);
+        expect(tagged()).toEqual([]);
+        expect(screen.queryByRole('alert')).toBeNull();
+        expect(button().disabled).toBe(false);
+        expect(suggestions(m)).toBe(1);
+      },
+    );
   });
 
   describe('approver queue', () => {
@@ -274,6 +481,26 @@ describe('App', () => {
         await screen.findByRole('heading', { name: 'Waiting for your decision' }),
       ).toBeTruthy();
       expect(await screen.findByText('Monitors')).toBeTruthy();
+    });
+
+    it('shows the category and the description, as text (Phase 4 criterion 19)', async () => {
+      const described = purchaseRequest({
+        id: ID(6),
+        title: 'Seats',
+        status: 'submitted',
+        category: 'software',
+        description: 'Design tool seats <b>x</b>',
+      });
+      mockFetch(base(AMIR, { 'GET /purchase-requests/to-decide': [waiting, described] }));
+      renderAs(AMIR);
+
+      const item = (await screen.findByText('Seats')).closest('li')!;
+      expect(within(item).getByText(/Software/)).toBeTruthy();
+      expect(within(item).getByText('Design tool seats <b>x</b>')).toBeTruthy();
+      expect(item.querySelector('b')).toBeNull();
+      // An empty description adds no paragraph.
+      const plain = screen.getByText('Monitors').closest('li')!;
+      expect(plain.querySelectorAll('p')).toHaveLength(1);
     });
 
     it('does not render or fetch the queue for a requester', async () => {

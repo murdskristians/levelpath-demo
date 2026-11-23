@@ -467,6 +467,62 @@ Format:
   - **`CLAUDE.md`** is fixed.
 - **Why:** a defect the approver describes but the gate doesn't fail is left for a busy human to notice. A check that is easy to automate belongs in the gate.
 
+## 2026-11-21: The spec assumed `messages.parse` returns `parsed_output: null` on a bad answer
+
+- **What went wrong:** the Phase 4 spec (requirement 13) said to call `messages.parse` with `zodOutputFormat(suggestionSchema)` and repair when `parsed_output` is null. The planner checked the shipped `@anthropic-ai/sdk@1.12.0` (`lib/parser.mjs`, `helpers/zod.mjs`): the helper's `parse` **throws** on text that is not JSON or fails the schema, and it runs before the caller can look at `stop_reason`. The output the repair needs would be lost, and a `max_tokens` cut-off or a refusal would be logged as `error`.
+- **Before:** a library's behaviour written into a spec from memory.
+- **After:** Chris approved the deviation: `messages.create` with only the `{ type, schema }` of `zodOutputFormat`, `stop_reason` checked first, the first text block `JSON.parse`d (the raw string when that fails), and our `suggestionSchema.safeParse` as the only judge. The SDK is pinned to exactly `1.12.0`, so the checked behaviour is the one installed. Two tests pin it: a refusal falls back after one call, and non-JSON text is repaired on the second call (`anthropic.provider.spec.ts`).
+- **Why:** the plan step "check the library, don't remember it" (2026-11-10) caught it before any code. It applies to behaviour as much as to versions: read the installed source when a design depends on what a call does on failure.
+
+## 2026-11-21: `max_tokens: 512` would have cut answers off before any JSON
+
+- **What went wrong:** the planner's first draft sent `max_tokens: 512` for a six-field answer. Both current models think by default, `claude-opus-5-5` can't turn it off, and thinking tokens count against `max_tokens`. A long think would end the call at `max_tokens` with no JSON, which falls back and is never repaired.
+- **Before:** the token budget sized for the answer alone.
+- **After:** `max_tokens: 2048` with `output_config.effort: "low"` (spec A16), checked against the claude-api reference by the orchestrator. A test asserts both values on the request.
+- **Why:** on a model that thinks, `max_tokens` is the budget for thinking plus answer. Size it for both, and keep the thinking short with effort instead of starving it.
+
+## 2026-11-22: `pnpm dev:llm` fails at once without a `.env`
+
+- **What went wrong:** the plan said Nest CLI 12.0.12 skips a missing `--env-file` with "`<path>` not found - starting without it". The CLI's code does that, but it never runs: Node 24.12 reads `--env-file` from **every** argument, even after the script name, so the CLI's own process exits first with `node.exe: ../../.env: not found` (exit 9). Reproduced with a two-line script: `node s.js --env-file missing.env` exits 9 too.
+- **Before:** the plan's claim came from reading the CLI's source, not from running the command.
+- **After:** checked by running the same `nest start` with a scratch file in place of `.env` (it held `LLM_PROVIDER=mock`, no key): `dev-llm.env` overrides it, and the API stops with the `ANTHROPIC_API_KEY` message and never listens. `dev:llm` therefore needs a `.env`; `.env.sample` and `CLAUDE.md` say so. It still fails safely: nothing starts, nothing is called.
+- **Why:** a code path read in a dependency is evidence only if the process actually reaches it. Run the real command, with the real runtime, before writing down what it prints.
+
+## 2026-11-22: A € typed into a Git Bash `curl` reached the API as U+FFFD
+
+- **What went wrong:** in the step 5 check, `curl -d '{"description":"… ~€1,200 each …"}'` from Git Bash on Windows sent the € as U+FFFD, so the mock found no amount and the result looked like an API bug. The API was right: the same body from a UTF-8 file gave `amountCents: 2400000`.
+- **Before:** inline non-ASCII JSON in a shell command.
+- **After:** send bodies with non-ASCII characters from a UTF-8 file (`curl --data-binary @body.json`), or through Node (`fetch`, as `evals/run.mjs` does). Noted here for the `verifier`, which runs these curls.
+- **Why:** when the check's own input is broken, the check fails on the wrong thing. Keep the shell out of the bytes.
+
+## 2026-11-22: The spec's `new Anthropic` grep matched `new AnthropicProvider`
+
+- **What went wrong:** criterion 15 checks that no spec file builds a real client with `grep -rn "new Anthropic" apps/api/src --include=*.spec.ts`. It also matched the test's `new AnthropicProvider(…, stub)`, which builds no client.
+- **Before:** the tests constructed the provider directly.
+- **After:** the tests build it through `createSuggestionProvider(config, stubCreateClient)`, the same factory the API uses, so the grep finds nothing. The real protection is structural: `startApp` always overrides the provider, and `createClient` is injected.
+- **Why:** a text search is a cheap tripwire, not a proof. Make the code match what the check means (no client built in tests), and keep the structural guard as the one that counts.
+
+## 2026-11-22: Adding a required field broke tests the plan didn't list
+
+- **What went wrong:** making `category` required (Phase 4) failed `apps/api/src/validation/zod-validation.pipe.spec.ts` (4 tests) and `apps/web/src/shared.test.ts`, which the plan's file list didn't name.
+- **Before:** the plan listed the files that create purchase requests by searching for the create route, not for the schema.
+- **After:** the bodies gained `category`; the "lists every issue" test now expects `category` among the issues. No assertion was loosened.
+- **Why:** when a plan changes a shared schema, search for every use of the schema (`grep -rn createPurchaseRequestSchema`, and literal bodies), not only for the route. The full gate catches the rest, which is why it runs after every step.
+
+## 2026-11-22: `pnpm eval -- --api x` passes the `--` through
+
+- **What went wrong:** pnpm 10 hands `pnpm eval -- --api x` to the script as `["--", "--api", "x"]`. `util.parseArgs` treats everything after `--` as positionals, so `--api` would be ignored and the runner would test the default port instead.
+- **Before:** nothing; found with a scratch package while planning.
+- **After:** `evals/run.mjs` drops one leading `--` before `parseArgs`. Checked: `--api http://localhost:3917` reaches that API, `--api http://localhost:1` exits 1.
+- **Why:** a runner that quietly tests the wrong server reports a pass rate for the wrong thing.
+
+## 2026-11-22: The mock scored 12/15 on the evals
+
+- **What went wrong:** review round 1 (verify, spec) found three eval cases the mock failed: "printer paper" hit the hardware keyword `printer`, "docking stations" had no keyword, and "Two … 1,450.00 EUR" had a quantity in words and a currency code. Round 1's fix documented 12/15 as the expected baseline; Chris then chose to make the mock pass every case instead.
+- **Before:** the mock's first matching category won, quantities were digits only, and amounts needed a currency symbol. A mock eval run always showed three known failures, so a new failure could hide among them.
+- **After:** the longest keyword found wins (`printer paper` and `docking station` are keywords), `one` to `twelve` count as quantities, and `EUR 1,200` and `1,200.00 EUR` are amounts (spec requirement 12, `mock.provider.ts`, new cases in `mock.provider.spec.ts`). `pnpm eval` against the mock gives `15/15 (100%)`.
+- **Why:** with the mock at 100%, any failing case in a mock run is a real regression in the runner, the route or the mock. The cost: a mock run no longer says anything about suggestion quality; only a run against the real model does, which `evals/run.mjs` now says.
+
 ## 2026-11-22: The U+FFFD check in the gate never ran
 
 - **What went wrong:** the check added on 2026-11-21 called `git grep … --. ':!pnpm-lock.yaml'`. `--.` is not `-- .`, so git stopped with `fatal: option '--.' must come before non-option arguments` (exit 128), and `if` read that as "no match". Every gate since #9 passed it without searching; the fatal line sits at the end of every `checks.log`. The 2026-11-21 entry's "it failed on `main`'s `CLAUDE.md`" can't have been true of the committed line. Phase 4's review round 4 found it (the spec reviewer noted the line; the orchestrator traced it).

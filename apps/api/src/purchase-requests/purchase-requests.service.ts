@@ -59,6 +59,8 @@ export class PurchaseRequestsService {
             title: input.title,
             amount_cents: input.amountCents,
             currency: input.currency,
+            category: input.category,
+            description: input.description,
           })
           .returning('id')
           .executeTakeFirstOrThrow());

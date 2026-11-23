@@ -1,5 +1,9 @@
 import { z } from 'zod';
-import { APPROVAL_DECISIONS, PURCHASE_REQUEST_STATUSES } from './values.js';
+import {
+  APPROVAL_DECISIONS,
+  PURCHASE_REQUEST_CATEGORIES,
+  PURCHASE_REQUEST_STATUSES,
+} from './values.js';
 
 // The Phase 3 API contract (docs/specs/purchase-requests-contract.md) as Zod schemas.
 // The API validates every request body with them; the web app validates its forms
@@ -7,6 +11,11 @@ import { APPROVAL_DECISIONS, PURCHASE_REQUEST_STATUSES } from './values.js';
 
 /** The largest amount, in cents: 100 million in any currency. Keeps it an exact integer. */
 export const MAX_AMOUNT_CENTS = 10_000_000_000;
+
+/** The longest description, in characters (the database CHECK says the same). */
+export const MAX_DESCRIPTION_LENGTH = 2000;
+
+const currencyCode = z.string().regex(/^[A-Z]{3}$/, 'a three-letter currency code, like EUR');
 
 export const supplierSchema = z.strictObject({
   id: z.uuid(),
@@ -28,11 +37,10 @@ export type Person = z.infer<typeof personSchema>;
 export const createPurchaseRequestSchema = z.strictObject({
   title: z.string().trim().min(1).max(200),
   amountCents: z.int().min(0).max(MAX_AMOUNT_CENTS),
-  currency: z
-    .string()
-    .regex(/^[A-Z]{3}$/, 'a three-letter currency code, like EUR')
-    .default('EUR'),
+  currency: currencyCode.default('EUR'),
   supplierId: z.uuid(),
+  category: z.enum(PURCHASE_REQUEST_CATEGORIES),
+  description: z.string().trim().max(MAX_DESCRIPTION_LENGTH).default(''),
 });
 /** What a client sends (currency may be left out). */
 export type CreatePurchaseRequestInput = z.input<typeof createPurchaseRequestSchema>;
@@ -59,6 +67,8 @@ export const purchaseRequestSchema = z.strictObject({
   amountCents: z.int().min(0).max(MAX_AMOUNT_CENTS),
   currency: z.string(),
   status: z.enum(PURCHASE_REQUEST_STATUSES),
+  category: z.enum(PURCHASE_REQUEST_CATEGORIES),
+  description: z.string(),
   supplier: supplierSchema,
   requester: personSchema,
   createdAt: z.iso.datetime(),
@@ -73,6 +83,34 @@ export const purchaseRequestSchema = z.strictObject({
     .nullable(),
 });
 export type PurchaseRequest = z.infer<typeof purchaseRequestSchema>;
+
+/** POST /purchase-requests/suggestion. Strict: the client can't send suppliers or a tenant. */
+export const suggestionRequestSchema = z.strictObject({
+  description: z.string().trim().min(1).max(MAX_DESCRIPTION_LENGTH),
+});
+export type SuggestionRequest = z.infer<typeof suggestionRequestSchema>;
+
+/**
+ * What the model must return, and what the API answers with. The API parses every
+ * provider output with it, so it is the only judge of a suggestion (no `.default()`
+ * or transforms beyond trim: the real provider sends it to the model as JSON Schema).
+ * `null` means "not in the description": the form leaves that field alone.
+ */
+export const suggestionSchema = z.strictObject({
+  title: z.string().trim().min(1).max(200),
+  category: z.enum(PURCHASE_REQUEST_CATEGORIES),
+  quantity: z.int().min(1).max(1_000_000).nullable(),
+  amountCents: z.int().min(0).max(MAX_AMOUNT_CENTS).nullable(),
+  currency: currencyCode.nullable(),
+  supplierId: z.uuid().nullable(),
+});
+export type Suggestion = z.infer<typeof suggestionSchema>;
+
+/** The route's only success shape: `suggestion` is null when the LLM gave nothing usable. */
+export const suggestionResponseSchema = z.strictObject({
+  suggestion: suggestionSchema.nullable(),
+});
+export type SuggestionResponse = z.infer<typeof suggestionResponseSchema>;
 
 /** Every error response. A 400 from schema validation also lists the issues. */
 export const apiErrorSchema = z.object({

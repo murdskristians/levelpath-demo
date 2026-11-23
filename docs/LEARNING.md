@@ -176,3 +176,39 @@ One entry per new concept: what it is, why it matters, where it lives in this re
 - **What:** `git pull` updates `package.json` and `pnpm-lock.yaml`, but not `node_modules`. If a merged PR added a package, the code needs a module that isn't installed until `pnpm install` runs. `pnpm install` with nothing new to install takes about 3 s.
 - **Why it matters:** After PR #8 added `zod` to the API, the API stopped compiling ("Cannot find module 'zod'"), while the web app, with nothing new, kept running. That looked like a web problem. `pnpm dev` now runs `pnpm install` first.
 - **Where:** the `dev` script in the root [package.json](../package.json).
+
+## One deadline for every attempt (Phase 4)
+
+- **What:** A suggestion gets one 15 s budget (`SUGGESTION_DEADLINE_MS`), set when the request arrives. Each provider call gets what is left of it, both as the SDK's `timeout` and as an `AbortSignal`, and the service races the call against the deadline, so a provider that ignores the signal still can't hold the request. The SDK's own retries are off (`maxRetries: 0`).
+- **Why it matters:** Retries hidden inside retries multiply: three SDK retries times two attempts, each with its own 60 s timeout, is minutes of a spinner and several bills for one click. One deadline owned by one place bounds both the wait and the cost, and the user can always click again.
+- **Where:** `raceAbort` and `suggest` in [suggestions.service.ts](../apps/api/src/suggestions/suggestions.service.ts); the client options in [anthropic.provider.ts](../apps/api/src/suggestions/anthropic.provider.ts).
+
+## Validate what the model returns, with your own schema (Phase 4)
+
+- **What:** The model is asked for JSON in the shape of `suggestionSchema` (structured outputs), but its answer is still treated as untrusted input: `suggestionSchema.safeParse` decides, every time. The structured-output decoder only enforces the JSON shape; limits such as `maxLength`, `minimum` or the currency pattern are moved into field descriptions, so `"eur"` or a quantity of `0` can still come back.
+- **Why it matters:** "The model will follow the format" is a hope, not a check. One schema in `packages/shared` is what the model is sent, what the API accepts and what the web app parses, so all three agree, and a bad answer is caught at the edge instead of in the form.
+- **Where:** [purchase-requests.ts](../packages/shared/src/purchase-requests.ts) (`suggestionSchema`), [suggestions.service.ts](../apps/api/src/suggestions/suggestions.service.ts).
+
+## A repair loop with a cap (Phase 4)
+
+- **What:** When the answer fails the schema, the service asks once more, with the validation errors in a `<validation_errors>` block (paths and messages only). At most 2 calls in total. Only schema failures are repaired: a refusal, `max_tokens`, a timeout or an API error falls back at once.
+- **Why it matters:** Showing the model exactly what was wrong fixes most near-misses cheaply, and the cap keeps a stubborn failure from becoming a loop. Repairing a refusal or a cut-off answer would only repeat the same failure at double the cost.
+- **Where:** [suggestions.service.ts](../apps/api/src/suggestions/suggestions.service.ts), [prompt.ts](../apps/api/src/suggestions/prompt.ts); the `mock:repair` marker in [mock.provider.ts](../apps/api/src/suggestions/mock.provider.ts).
+
+## A fallback the user can't tell from "no idea" (Phase 4)
+
+- **What:** Whatever goes wrong with the LLM, the route answers `200 {"suggestion": null}` and the form says "No suggestion this time. Fill in the fields yourself." in a `role="status"` note, never in the page's error alert. The reason (`invalid`, `timeout`, `refusal`, `max_tokens`, `error`) goes to the log, not to the client.
+- **Why it matters:** Suggest fields is a convenience on top of a form that works without it. A 500 or a red alert would turn an optional helper into a broken page. Degrading to the plain form keeps the core path working when the model is slow, down or wrong, and the log still tells the developer why.
+- **Where:** [suggestions.service.ts](../apps/api/src/suggestions/suggestions.service.ts), [NewRequestForm.tsx](../apps/web/src/components/NewRequestForm.tsx).
+
+## Prompt injection: the description is data, not instructions (Phase 4)
+
+- **What:** The user's text goes only into the user message, inside `<description>` tags, with `&`, `<` and `>` escaped, so `</description>` in the text can't close the block. The system prompt says the block is data. The supplier list comes from the database (the caller's tenant), never from the request, and a `supplierId` outside it becomes `null`.
+- **Why it matters:** Anyone can type "ignore your instructions" into a form. Escaping keeps the text from changing the prompt's structure, and the checks after the call (schema, supplier filter) limit what an injection that still works can do: at worst a wrong suggestion the user sees and edits, never another company's supplier.
+- **Where:** [prompt.ts](../apps/api/src/suggestions/prompt.ts), `withOwnSupplier` in [suggestions.service.ts](../apps/api/src/suggestions/suggestions.service.ts); the injection cases in [evals/cases.json](../evals/cases.json).
+
+## Logs without personal data (Phase 4)
+
+- **What:** Each suggestion writes one JSON line: provider, model, latency, attempts, validation failures, outcome, reason, error class, and the description's length and the first 12 hex characters of its SHA-256. Never the description, the model's output, `err.message`, a key or a name.
+- **Why it matters:** A purchase description can hold names, prices or anything a user pastes. The hash still lets you see that the same text failed three times, and the length and latency explain most problems, without the log becoming a second copy of user data.
+- **Where:** the `llm_suggestion` line at the end of `suggest` in [suggestions.service.ts](../apps/api/src/suggestions/suggestions.service.ts); the log tests in [suggestions.service.spec.ts](../apps/api/src/suggestions/suggestions.service.spec.ts).

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { formatAmount, parseAmountToCents } from './money';
+import { MAX_AMOUNT_CENTS } from '@levelpath/shared';
+import { centsToAmountText, formatAmount, parseAmountToCents } from './money';
 
 describe('parseAmountToCents', () => {
   it.each([
@@ -28,4 +29,25 @@ describe('formatAmount', () => {
   it('survives an unknown currency code', () => {
     expect(formatAmount(150, 'ZZ')).toBe('1.50 ZZ');
   });
+});
+
+describe('centsToAmountText', () => {
+  it.each([
+    [2_400_000, '24000.00'],
+    [1234, '12.34'],
+    [105, '1.05'],
+    [29, '0.29'],
+    [5, '0.05'],
+    [0, '0.00'],
+    [MAX_AMOUNT_CENTS, '100000000.00'],
+  ])('shows %i as %s', (cents, text) => {
+    expect(centsToAmountText(cents)).toBe(text);
+  });
+
+  it.each([0, 5, 29, 105, 1234, 2_400_000, MAX_AMOUNT_CENTS])(
+    'round-trips %i through parseAmountToCents',
+    (cents) => {
+      expect(parseAmountToCents(centsToAmountText(cents))).toBe(cents);
+    },
+  );
 });

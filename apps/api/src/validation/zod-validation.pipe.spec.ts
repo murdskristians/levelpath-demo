@@ -28,10 +28,22 @@ function rejection(pipe: ZodValidationPipe<unknown>, value: unknown): ApiError {
 const paths = (error: ApiError) => (error.issues ?? []).map((issue) => issue.path);
 
 describe('ZodValidationPipe', () => {
-  it('returns the parsed body: the title trimmed, the currency defaulted', () => {
+  it('returns the parsed body: the title trimmed, the currency and description defaulted', () => {
     expect(
-      create.transform({ title: '  Chairs  ', amountCents: 100, supplierId: SUPPLIER }),
-    ).toEqual({ title: 'Chairs', amountCents: 100, currency: 'EUR', supplierId: SUPPLIER });
+      create.transform({
+        title: '  Chairs  ',
+        amountCents: 100,
+        supplierId: SUPPLIER,
+        category: 'other',
+      }),
+    ).toEqual({
+      title: 'Chairs',
+      amountCents: 100,
+      currency: 'EUR',
+      supplierId: SUPPLIER,
+      category: 'other',
+      description: '',
+    });
     expect(decide.transform({ decision: 'approved' })).toEqual({
       decision: 'approved',
       comment: '',
@@ -43,6 +55,7 @@ describe('ZodValidationPipe', () => {
       title: 'x',
       amountCents: 100,
       supplierId: SUPPLIER,
+      category: 'other',
       id: 'a0000000-0000-4000-8000-000000000999',
     });
     expect(error.statusCode).toBe(400);
@@ -56,7 +69,14 @@ describe('ZodValidationPipe', () => {
 
   it('names the field: an empty title is at "title"', () => {
     expect(
-      paths(rejection(create, { title: '  ', amountCents: 100, supplierId: SUPPLIER })),
+      paths(
+        rejection(create, {
+          title: '  ',
+          amountCents: 100,
+          supplierId: SUPPLIER,
+          category: 'other',
+        }),
+      ),
     ).toEqual(['title']);
   });
 
@@ -65,8 +85,13 @@ describe('ZodValidationPipe', () => {
   });
 
   it('lists every issue, each with a message', () => {
-    const error = rejection(create, { title: '', amountCents: 1.5, supplierId: 'not-a-uuid' });
-    expect(paths(error).sort()).toEqual(['amountCents', 'supplierId', 'title']);
+    const error = rejection(create, {
+      title: '',
+      amountCents: 1.5,
+      supplierId: 'not-a-uuid',
+      category: 'furniture',
+    });
+    expect(paths(error).sort()).toEqual(['amountCents', 'category', 'supplierId', 'title']);
     for (const issue of error.issues ?? []) expect(issue.message).not.toBe('');
   });
 });

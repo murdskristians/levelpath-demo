@@ -12,6 +12,7 @@ import {
 
 // Spec criteria 6 and 7, over real HTTP against this run's database: GET
 // /purchase-requests/mine and /to-decide, each only the caller's company, in order.
+// Phase 4 criterion 5: every element carries its category and description.
 
 const A = SEED.acme;
 const B = SEED.globex;
@@ -51,7 +52,13 @@ async function createAs(userId: string, title: string): Promise<PurchaseRequest>
   const res = await fetch(`${url}/purchase-requests`, {
     method: 'POST',
     headers: { 'X-User-Id': userId, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ title, amountCents: 1000, supplierId: A.suppliers[0] }),
+    body: JSON.stringify({
+      title,
+      amountCents: 1000,
+      supplierId: A.suppliers[0],
+      category: 'software',
+      description: 'List test description',
+    }),
   });
   expect(res.status).toBe(201);
   return purchaseRequestSchema.parse(await res.json());
@@ -96,6 +103,19 @@ describe('GET /purchase-requests/mine (criterion 6)', () => {
     expect(mine.find((r) => r.id === A.purchaseRequests[0])?.decision).toBeNull();
   });
 
+  it('carries category and description: the seeded ones and a created one (Phase 4 criterion 5)', async () => {
+    const created = await createAs(A.requester, 'List test fields');
+    const mine = await list(A.requester, '/purchase-requests/mine');
+    expect(mine.find((r) => r.id === A.purchaseRequests[1])).toMatchObject({
+      category: 'other',
+      description: '',
+    });
+    expect(mine.find((r) => r.id === created.id)).toMatchObject({
+      category: 'software',
+      description: 'List test description',
+    });
+  });
+
   it('as Bella holds only Globex ids', async () => {
     const mine = await list(B.requester, '/purchase-requests/mine');
     expect(mine.map((r) => r.id).sort()).toEqual([...B.purchaseRequests].sort());
@@ -117,6 +137,14 @@ describe('GET /purchase-requests/to-decide (criterion 7)', () => {
     for (let i = 1; i < toDecide.length; i++) {
       expect(toDecide[i].createdAt >= toDecide[i - 1].createdAt).toBe(true);
     }
+  });
+
+  it('carries category and description (Phase 4 criterion 5)', async () => {
+    const toDecide = await list(A.approver, '/purchase-requests/to-decide');
+    expect(toDecide.find((r) => r.id === A.purchaseRequests[1])).toMatchObject({
+      category: 'other',
+      description: '',
+    });
   });
 
   it("as Boris holds only Globex's submitted request", async () => {
