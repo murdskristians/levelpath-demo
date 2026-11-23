@@ -48,7 +48,7 @@ export function RequestList({
             </p>
           )}
           {r.status === 'draft' && (
-            <button type="button" onClick={() => onSubmit(r.id)}>
+            <button type="button" aria-label={`Submit ${r.title}`} onClick={() => onSubmit(r.id)}>
               Submit
             </button>
           )}

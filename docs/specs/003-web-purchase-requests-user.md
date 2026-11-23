@@ -43,7 +43,7 @@
 8. Form request: filling title "Laptops", amount `12.34`, currency EUR and a supplier from the mocked `/suppliers`, then submitting, sends exactly one `POST /api/purchase-requests` with JSON body `{"title":"Laptops","amountCents":1234,"currency":"EUR","supplierId":"<id>"}`; the form closes and the new draft shows after the re-fetch. Amounts `0.29` and `1.15` send `29` and `115`.
 9. Approver section: as Amir (approver) "Waiting for your decision" lists the `to-decide` items. As Alice the heading is absent and `to-decide` was never fetched.
 10. Approve: clicking Approve POSTs `{"decision":"approved","comment":"<text or empty>"}` to `/api/purchase-requests/<id>/decision`, then the queue is fetched again.
-11. Reject: clicking Reject with an empty comment sends nothing and shows "a rejection needs a comment" next to the box. With the comment "too dear" it POSTs `{"decision":"rejected","comment":"too dear"}`.
+11. Reject: clicking Reject with an empty comment sends nothing and shows "A rejection needs a comment." next to the box. With the comment "too dear" it POSTs `{"decision":"rejected","comment":"too dear"}`.
 12. API error: a mocked 409 `{statusCode:409,message:"not a draft"}` on Submit shows "not a draft" in an element with `role="alert"`, and the lists stay on screen.
 13. 401: a mocked 401 shows a message containing "pick a user".
 14. Bad response: a mocked `mine` response that fails `purchaseRequestSchema` (for example a missing `supplier`) shows an alert and no request rows.

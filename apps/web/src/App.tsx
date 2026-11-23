@@ -95,8 +95,7 @@ function Dashboard({ userId, picker }: { userId: string; picker: ReactNode }) {
         <ErrorAlert error={error} />
         <section aria-labelledby="purchase-requests-heading">
           <h2 id="purchase-requests-heading">Purchase requests</h2>
-          {mine && <RequestList requests={mine} onSubmit={(id) => void submit(id)} />}
-          {formOpen ? (
+          {formOpen && (
             <NewRequestForm
               suppliers={suppliers}
               onCreate={create}
@@ -104,7 +103,9 @@ function Dashboard({ userId, picker }: { userId: string; picker: ReactNode }) {
               onSuggest={(description) => api.suggest(description)}
               onCancel={() => setFormOpen(false)}
             />
-          ) : (
+          )}
+          {mine && <RequestList requests={mine} onSubmit={(id) => void submit(id)} />}
+          {!formOpen && (
             <button type="button" onClick={() => setFormOpen(true)}>
               New request
             </button>

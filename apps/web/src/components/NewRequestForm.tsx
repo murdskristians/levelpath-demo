@@ -6,7 +6,7 @@ import {
   type SuggestionResponse,
   type Supplier,
 } from '@levelpath/shared';
-import { useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { CATEGORY_OPTIONS } from '../categories';
 import { centsToAmountText, parseAmountToCents } from '../money';
 
@@ -43,6 +43,8 @@ export function NewRequestForm({
   onSuggest: (description: string) => Promise<SuggestionResponse>;
   onCancel: () => void;
 }) {
+  const titleRef = useRef<HTMLInputElement>(null);
+  useEffect(() => titleRef.current?.focus(), []);
   const [description, setDescription] = useState('');
   const [title, setTitle] = useState('');
   const [category, setCategory] = useState('');
@@ -185,6 +187,7 @@ export function NewRequestForm({
         {head('title', 'Title')}
         <input
           id="title"
+          ref={titleRef}
           value={title}
           onChange={(e) => {
             setTitle(e.target.value);
