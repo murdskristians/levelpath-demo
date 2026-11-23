@@ -6,13 +6,23 @@ import { DecisionQueue } from './components/DecisionQueue';
 import { ErrorAlert } from './components/ErrorAlert';
 import { NewRequestForm } from './components/NewRequestForm';
 import { RequestList } from './components/RequestList';
+import { ThemeToggle } from './components/ThemeToggle';
 import { UserPicker } from './components/UserPicker';
+import { applyTheme, getInitialTheme, saveTheme, type Theme } from './theme';
 import { loadUserId, saveUserId } from './users';
 
 type DecideInput = { decision: 'approved' | 'rejected'; comment: string };
 
 /** Everything for one user. App keys it by user id, so switching users resets it all. */
-function Dashboard({ userId, picker }: { userId: string; picker: ReactNode }) {
+function Dashboard({
+  userId,
+  picker,
+  themeToggle,
+}: {
+  userId: string;
+  picker: ReactNode;
+  themeToggle: ReactNode;
+}) {
   const api = useMemo(() => createApi(userId), [userId]);
   const [me, setMe] = useState<Me | null>(null);
   const [mine, setMine] = useState<PurchaseRequest[] | null>(null);
@@ -84,6 +94,7 @@ function Dashboard({ userId, picker }: { userId: string; picker: ReactNode }) {
     <>
       <header>
         {picker}
+        {themeToggle}
         {me && (
           <p className="identity">
             <strong>{me.user.name}</strong> · {me.tenant.name}
@@ -129,13 +140,25 @@ export function App() {
   }
   const picker = <UserPicker userId={userId} onChange={pick} />;
 
+  const [theme, setTheme] = useState<Theme>(getInitialTheme);
+  useEffect(() => applyTheme(theme), [theme]);
+  function toggleTheme() {
+    const next = theme === 'light' ? 'dark' : 'light';
+    saveTheme(next);
+    setTheme(next);
+  }
+  const themeToggle = <ThemeToggle theme={theme} onToggle={toggleTheme} />;
+
   return (
     <>
       {userId ? (
-        <Dashboard key={userId} userId={userId} picker={picker} />
+        <Dashboard key={userId} userId={userId} picker={picker} themeToggle={themeToggle} />
       ) : (
         <>
-          <header>{picker}</header>
+          <header>
+            {picker}
+            {themeToggle}
+          </header>
           <main>
             <h1>Levelpath Demo</h1>
             <p className="empty-state">Pick a user above to see purchase requests.</p>

@@ -662,6 +662,60 @@ describe('App', () => {
     });
   });
 
+  describe('theme', () => {
+    const stubMedia = (dark: boolean) =>
+      vi.stubGlobal('matchMedia', () => ({ matches: dark }) as MediaQueryList);
+    const theme = () => document.documentElement.dataset.theme;
+    const header = () => within(screen.getByRole('banner'));
+
+    afterEach(() => {
+      delete document.documentElement.dataset.theme;
+    });
+
+    it('follows the system setting when nothing is stored', () => {
+      mockFetch({});
+      stubMedia(true);
+      render(<App />);
+      expect(theme()).toBe('dark');
+      cleanup();
+      stubMedia(false);
+      render(<App />);
+      expect(theme()).toBe('light');
+    });
+
+    it('puts one toggle in the header with and without a user', async () => {
+      mockFetch(base(ALICE));
+      render(<App />);
+      expect(header().getAllByRole('button', { name: 'Switch to dark theme' })).toHaveLength(1);
+      cleanup();
+      renderAs(ALICE);
+      await header().findByText('Alice');
+      expect(header().getAllByRole('button', { name: 'Switch to dark theme' })).toHaveLength(1);
+    });
+
+    it('toggles there and back, renaming the button', () => {
+      mockFetch({});
+      render(<App />);
+      fireEvent.click(header().getByRole('button', { name: 'Switch to dark theme' }));
+      expect(theme()).toBe('dark');
+      fireEvent.click(header().getByRole('button', { name: 'Switch to light theme' }));
+      expect(theme()).toBe('light');
+      expect(header().getByRole('button', { name: 'Switch to dark theme' })).toBeTruthy();
+    });
+
+    it('keeps the choice across a reload, against the system setting', () => {
+      mockFetch({});
+      stubMedia(false);
+      render(<App />);
+      fireEvent.click(screen.getByRole('button', { name: 'Switch to dark theme' }));
+      expect(localStorage.getItem('levelpath.theme')).toBe('dark');
+      cleanup();
+      delete document.documentElement.dataset.theme;
+      render(<App />);
+      expect(theme()).toBe('dark');
+    });
+  });
+
   describe('styles', () => {
     const css = readFileSync('src/App.css', 'utf8');
 

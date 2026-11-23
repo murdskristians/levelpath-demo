@@ -212,3 +212,9 @@ One entry per new concept: what it is, why it matters, where it lives in this re
 - **What:** Each suggestion writes one JSON line: provider, model, latency, attempts, validation failures, outcome, reason, error class, and the description's length and the first 12 hex characters of its SHA-256. Never the description, the model's output, `err.message`, a key or a name.
 - **Why it matters:** A purchase description can hold names, prices or anything a user pastes. The hash still lets you see that the same text failed three times, and the length and latency explain most problems, without the log becoming a second copy of user data.
 - **Where:** the `llm_suggestion` line at the end of `suggest` in [suggestions.service.ts](../apps/api/src/suggestions/suggestions.service.ts); the log tests in [suggestions.service.spec.ts](../apps/api/src/suggestions/suggestions.service.spec.ts).
+
+## Theming with CSS variables and a pre-paint script
+
+- **What:** Every colour in `App.css` is a CSS custom property: light values on `:root`, dark ones under `:root[data-theme='dark']`. The header toggle sets `data-theme` on `<html>` and saves it under `levelpath.theme`. With nothing saved, `prefers-color-scheme` decides. A small inline script in `index.html` sets the attribute before first paint.
+- **Why it matters:** Swapping a handful of variables restyles the whole app without touching any rule. Without the inline script, React sets the theme after the first paint, so a dark user would see a light flash on every reload. The script and `getInitialTheme` follow the same rule, and a test keeps the script in place.
+- **Where:** [theme.ts](../apps/web/src/theme.ts), [ThemeToggle.tsx](../apps/web/src/components/ThemeToggle.tsx), [index.html](../apps/web/index.html), [App.css](../apps/web/src/App.css).
