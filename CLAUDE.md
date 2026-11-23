@@ -52,8 +52,6 @@ Every driver uses the same parts:
 
 Every driver ends with a PR that **only Chris merges**. Before merging, `/try <pr>` runs it locally.
 
-**CI** (`.github/workflows/`) checks every PR to `main`: `ci.yml` runs the gate, plus the harness tests and the mock evals when their paths change, and its `ci` job is the one required check. `review.yml` posts an advisory Claude review; `evals-real.yml` runs the real-model evals only when Chris starts it. Setup and limits: `docs/HARNESS.md`, "CI".
-
 ## Rules
 
 - **Plan before code.** Wait for approval of the plan before editing files.

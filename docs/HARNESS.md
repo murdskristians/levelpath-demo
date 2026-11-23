@@ -55,7 +55,7 @@ A gate failure or a CHANGES verdict starts the next build round, up to three, th
   - no merge command in any driver;
   - `guard.py` blocks `gh pr merge`, API merges, approvals and pushes to `main`;
   - `settings.json` denies `gh pr merge`;
-  - branch protection: a PR is required, and so is the `ci` check (see [CI](#ci)).
+  - branch protection.
 
   The guard runs even under `--dangerously-skip-permissions` (tested).
 
@@ -66,7 +66,7 @@ A gate failure or a CHANGES verdict starts the next build round, up to three, th
   - every agent defaults to sonnet; opus only for high-risk routing;
   - headless agents have turn and dollar caps;
   - nothing runs on a schedule unless started;
-  - no API key is passed on to the drivers, so local runs use the subscription. The one paid automatic call is CI's advisory review, capped at 15 turns (see [CI](#ci)).
+  - no API key is passed on, so runs use the subscription.
 
 ## Where each part came from
 
@@ -85,51 +85,6 @@ Code from the public ZazenCodes factory (GPLv3) was adapted here. From my two pr
 | `CLAUDE.md`, `REVIEW.md`, `docs/templates/`, skills          | written here                                             | -                                                                                                                       |
 
 The changelog records what changed and why. Credits and licences are in [CREDITS.md](../CREDITS.md).
-
-## CI
-
-GitHub Actions checks every PR to `main`, whoever opened it and whichever driver built it. The drivers' own gate and reviews still run first; CI repeats the gate where everyone can see it.
-
-| Workflow         | Trigger                                                     | Runs                                                                                                                           | Secret              |
-| ---------------- | ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ | ------------------- |
-| `ci.yml` `gate`  | every PR to `main`                                          | `bash factory/checks.sh` with a Postgres service: install, build, lint, test, the U+FFFD check                                 | none                |
-| `harness-tests`  | PRs touching `.claude/`, `factory/`, `adws/`                | `.claude/hooks/test_hooks.py`, `factory/tests/run_test.py`                                                                     | none                |
-| `mock-evals`     | PRs touching `CLAUDE.md`, `.claude/`, `prompt.ts`, `evals/` | the API on the `MockProvider`, `pnpm eval`; fails unless every case passes                                                     | none                |
-| `ci`             | always, after the jobs above                                | red if any of them failed or was cancelled, green if they passed or were skipped. **The one required check.**                  | none                |
-| `review.yml`     | every PR from a branch in this repo                         | `claude-code-action`: one advisory comment by `REVIEW.md`, edited on each push, at most 15 turns. Never required, never blocks | `ANTHROPIC_API_KEY` |
-| `evals-real.yml` | only when Chris starts it                                   | the evals against the real model; the pass rate goes to the run summary. Never fails on a low rate                             | `ANTHROPIC_API_KEY` |
-
-**Chris's one-time setup:**
-
-1. Add the key: `gh secret set ANTHROPIC_API_KEY` (it prompts for the value; nothing lands in shell history).
-2. Install the Claude GitHub app on this repo: <https://github.com/apps/claude>. The review posts as `claude[bot]`; without the app it fails (advisory, so the PR isn't blocked), and the comment can only be edited in place when it comes from the app.
-3. Make `ci` required on `main`, keeping the PR requirement and 0 approvals:
-
-   ```bash
-   gh api -X PUT 'repos/{owner}/{repo}/branches/main/protection' --input - <<'EOF'
-   {
-     "required_status_checks": { "strict": false, "checks": [{ "context": "ci" }] },
-     "enforce_admins": false,
-     "required_pull_request_reviews": { "required_approving_review_count": 0 },
-     "restrictions": null,
-     "allow_force_pushes": false,
-     "allow_deletions": false
-   }
-   EOF
-   ```
-
-   Or Settings → Branches → the `main` rule → "Require status checks to pass" → add `ci`. `ci` appears in the list after it has run once on a PR.
-
-4. Real-model evals, when wanted: `gh workflow run evals-real.yml`, or Actions → Real-model evals → Run workflow. Each run costs money.
-
-**Why approvals stay at 0 (D9).** Every PR here is opened under Chris's GitHub account: the agents use his `gh` login. GitHub never lets a PR's author approve it, so a required approval would block every merge. The human gate is the merge itself: only Chris merges, and `guard.py` stops any agent from approving or merging, whatever its prompt says.
-
-**What branch protection can't do:**
-
-- `enforce_admins` is off, so Chris, as an admin, can still merge a red PR. That is a deliberate escape hatch, not a check.
-- The Claude review is advice. A `VERDICT: CHANGES` comment blocks nothing; Chris reads it.
-- `harness-tests` and `mock-evals` run only when `changes` finds their paths. A change elsewhere that breaks them (a helper the evals import, say) is caught only by the gate's own tests.
-- Fork PRs get the gate, but never the review or a secret.
 
 ## Try it
 

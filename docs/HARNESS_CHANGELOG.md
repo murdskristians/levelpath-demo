@@ -539,15 +539,9 @@ Format:
   - `/review` step 3 and `/verify` step 5 check that the files exist, resume a reviewer once to write its own file, then tell Chris. The orchestrator never writes a review file itself.
 - **Why:** the file is what the next round, the approver and Chris read. A review that exists only in one session's chat is lost to all of them, and an orchestrator that writes it hides the gap.
 
-## 2026-11-23: CI runs the gate on every PR (Phase 5)
+## 2026-11-23: Phase 5 CI dropped; the local gate stays the only gate
 
-- **What went wrong:** nothing on GitHub checked a PR. The gate and the reviews ran only on the machine that built the branch, so a PR's green status was its author's word, and a check could fail silently for days on the one machine that ran it (the U+FFFD check, 2026-11-22). The 2026-11-17 Phase 1 evidence entry also promised that Phase 5 would run the harness tests in CI; there was no CI.
-- **Before:** branch protection required a PR and nothing else. The harness tests ran when someone remembered.
-- **After:** three workflows (`docs/HARNESS.md`, "CI"):
-  - `ci.yml` runs `factory/checks.sh` itself with Postgres, the harness tests when `.claude/`, `factory/` or `adws/` change, and the mock evals (every case must pass) when `CLAUDE.md`, `.claude/`, the prompt or `evals/` change. One `if: always()` job, `ci`, is the required check.
-  - `review.yml` posts one advisory Claude review by `REVIEW.md`, for branches in this repo only.
-  - `evals-real.yml` runs the real-model evals only when Chris starts it.
-
-  Planning found two things the plan's first draft had wrong: the review action edits a comment in place only when it posts as the Claude GitHub app (`use_sticky_comment` matches `claude[bot]`), so the app is part of the setup; and a branch protection body with `required_pull_request_reviews: null` would have dropped the PR requirement, so the command keeps it with 0 approvals.
-
-- **Why:** a check only one machine runs is a claim, not a check. CI runs the same script on a clean machine for every PR, where Chris can see it before he merges.
+- **What went wrong:** Phase 5 built three GitHub Actions workflows (the gate on every PR, an advisory Claude review, real-model evals on demand). On their first PR (#14), GitHub started no job: "The job was not started because your account is locked due to a billing issue". The account is on GitHub Free with $0 due, so the lock is GitHub's flag, which only GitHub Support clears, and Chris won't spend time or money on that for a demo. Before building, Chris said he had no way to use Actions; Claude answered that public repos need no setup, and planned and built the workflows without checking that Actions could run.
+- **Before:** the plan assumed Actions runs on the account. The 2026-11-17 Phase 1 evidence entry promised the harness tests in CI.
+- **After:** no workflows. `factory/checks.sh` (install, build, lint, test, the U+FFFD check) stays the only gate, run by every driver before the PR. The factory and the ADWs post its result, the reviews and the screenshots on the PR, so the evidence is still public. Branch protection stays as it was: a PR is required, with 0 approvals, and only Chris merges. The intent, spec and plan in `docs/*/ci-automated-review.md` stay as the record of the design, which can be brought back if Actions becomes available.
+- **Why:** a required check that can never run blocks every PR or teaches people to ignore red. When a user says a tool isn't available to them, check it (`gh run` on a throwaway PR, or the account's Actions status) before planning around it, instead of answering from what is usually true.

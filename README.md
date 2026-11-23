@@ -31,7 +31,7 @@ Needs Node 24, pnpm 10 and Docker.
 pnpm install
 pnpm dev      # Postgres (healthy), the API on :3000, the web app on :5173
 pnpm db:migrate && pnpm db:seed   # the tables (RLS forced on each) and two demo companies
-pnpm build    # all three must exit 0; CI and the harness's gate run the same
+pnpm build    # all three must exit 0; the harness's gate runs the same
 pnpm lint
 pnpm test     # needs Postgres up (pnpm db:up): each run uses its own throwaway database
 ```
