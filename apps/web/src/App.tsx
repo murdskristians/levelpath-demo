@@ -6,7 +6,9 @@ import { DecisionQueue } from './components/DecisionQueue';
 import { ErrorAlert } from './components/ErrorAlert';
 import { NewRequestForm } from './components/NewRequestForm';
 import { RequestList } from './components/RequestList';
+import { ThemeToggle } from './components/ThemeToggle';
 import { UserPicker } from './components/UserPicker';
+import { useTheme } from './theme';
 import { loadUserId, saveUserId } from './users';
 
 type DecideInput = { decision: 'approved' | 'rejected'; comment: string };
@@ -127,7 +129,13 @@ export function App() {
     saveUserId(id);
     setUserId(id);
   }
-  const picker = <UserPicker userId={userId} onChange={pick} />;
+  const { theme, toggle } = useTheme();
+  const picker = (
+    <>
+      <UserPicker userId={userId} onChange={pick} />
+      <ThemeToggle theme={theme} onToggle={toggle} />
+    </>
+  );
 
   return (
     <>

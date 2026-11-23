@@ -30,6 +30,7 @@ describe('App', () => {
     vi.useRealTimers();
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
+    delete document.documentElement.dataset.theme;
   });
 
   describe('shell', () => {
@@ -674,6 +675,102 @@ describe('App', () => {
       for (const [, n, unit] of widths) {
         expect(Number(n) * (unit === 'rem' ? 16 : 1)).toBeLessThanOrEqual(320);
       }
+    });
+  });
+
+  describe('theme', () => {
+    const THEME_KEY = 'levelpath.theme';
+    const stubSystem = (dark: boolean) =>
+      vi.stubGlobal('matchMedia', (query: string) => ({ matches: dark, media: query }));
+    const toggle = () => screen.getByRole('button', { name: 'Dark theme' });
+    const theme = () => document.documentElement.dataset.theme;
+
+    beforeEach(() => {
+      mockFetch({});
+    });
+
+    it('follows a dark system setting', () => {
+      stubSystem(true);
+      render(<App />);
+      expect(theme()).toBe('dark');
+      expect(toggle().getAttribute('aria-pressed')).toBe('true');
+    });
+
+    it('follows a light system setting, and light without matchMedia', () => {
+      stubSystem(false);
+      render(<App />);
+      expect(theme()).toBe('light');
+      expect(toggle().getAttribute('aria-pressed')).toBe('false');
+      cleanup();
+      vi.stubGlobal('matchMedia', undefined);
+      render(<App />);
+      expect(theme()).toBe('light');
+      expect(toggle().getAttribute('aria-pressed')).toBe('false');
+    });
+
+    it('toggles and saves the choice', () => {
+      stubSystem(false);
+      render(<App />);
+      fireEvent.click(toggle());
+      expect(theme()).toBe('dark');
+      expect(toggle().getAttribute('aria-pressed')).toBe('true');
+      expect(localStorage.getItem(THEME_KEY)).toBe('dark');
+      fireEvent.click(toggle());
+      expect(theme()).toBe('light');
+      expect(localStorage.getItem(THEME_KEY)).toBe('light');
+    });
+
+    it('does not save anything until the toggle is clicked', () => {
+      stubSystem(true);
+      render(<App />);
+      expect(localStorage.getItem(THEME_KEY)).toBeNull();
+    });
+
+    it('restores the saved theme over the system setting after a remount', () => {
+      stubSystem(false);
+      const first = render(<App />);
+      fireEvent.click(toggle());
+      first.unmount();
+      delete document.documentElement.dataset.theme;
+      render(<App />);
+      expect(theme()).toBe('dark');
+      expect(toggle().getAttribute('aria-pressed')).toBe('true');
+    });
+
+    it('ignores an invalid saved value', () => {
+      stubSystem(true);
+      localStorage.setItem(THEME_KEY, 'purple');
+      render(<App />);
+      expect(theme()).toBe('dark');
+    });
+
+    it('keeps working and warns when storage throws', () => {
+      stubSystem(false);
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const getItem = Storage.prototype.getItem;
+      vi.spyOn(Storage.prototype, 'getItem').mockImplementation(function (this: Storage, k) {
+        if (k === THEME_KEY) throw new Error('blocked');
+        return getItem.call(this, k);
+      });
+      vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+        throw new Error('blocked');
+      });
+      render(<App />);
+      expect(theme()).toBe('light');
+      fireEvent.click(toggle());
+      expect(theme()).toBe('dark');
+      expect(warn).toHaveBeenCalled();
+    });
+
+    it('shows the toggle with a user picked too', async () => {
+      stubSystem(false);
+      render(<App />);
+      expect(toggle()).toBeTruthy();
+      cleanup();
+      mockFetch(base(ALICE));
+      renderAs(ALICE);
+      await screen.findByRole('heading', { name: 'Purchase requests' });
+      expect(toggle()).toBeTruthy();
     });
   });
 });
