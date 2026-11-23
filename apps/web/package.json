@@ -6,6 +6,7 @@
   "scripts": {
     "build": "tsc --noEmit && vite build",
     "dev": "node scripts/wait-for-api.mjs && vite",
+    "dev:llm": "pnpm run dev",
     "test": "vitest run"
   },
   "dependencies": {

@@ -1,4 +1,5 @@
 import type { PurchaseRequest } from '@levelpath/shared';
+import { CATEGORY_LABELS } from '../categories';
 import { formatAmount } from '../money';
 
 const STATUS_LABEL = {
@@ -33,7 +34,8 @@ export function RequestList({
         <li key={r.id}>
           <h3>{r.title}</h3>
           <p>
-            {formatAmount(r.amountCents, r.currency)} · {r.supplier.name}
+            {formatAmount(r.amountCents, r.currency)} · {r.supplier.name} ·{' '}
+            {CATEGORY_LABELS[r.category]}
           </p>
           <p>
             <StatusBadge status={r.status} />

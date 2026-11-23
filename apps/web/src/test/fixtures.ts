@@ -20,6 +20,8 @@ export function purchaseRequest(over: Partial<PurchaseRequest> = {}): PurchaseRe
     amountCents: 125000,
     currency: 'EUR',
     status: 'draft',
+    category: 'other',
+    description: '',
     supplier: supplier(),
     requester: { id: USERS[0].id, name: 'Alice' },
     createdAt: '2026-01-01T10:00:00.000Z',
@@ -74,7 +76,8 @@ export function mockFetch(routes: Record<string, Handler>) {
         status: 404,
       });
     }
-    const reply = typeof handler === 'function' ? handler(call) : handler;
+    // A handler may return a promise, so a test can hold a reply until it resolves it.
+    const reply: unknown = await (typeof handler === 'function' ? handler(call) : handler);
     if (reply instanceof Failure) {
       return new Response(JSON.stringify(reply.body), { status: reply.status });
     }

@@ -1,5 +1,10 @@
 import type { ColumnType, Generated } from 'kysely';
-import type { ApprovalDecision, PurchaseRequestStatus, UserRole } from '@levelpath/shared';
+import type {
+  ApprovalDecision,
+  PurchaseRequestCategory,
+  PurchaseRequestStatus,
+  UserRole,
+} from '@levelpath/shared';
 
 // Hand-written table types for Kysely, matching db/migrations/. A column Postgres
 // fills in (an id, a default, a timestamp) is Generated: optional on insert.
@@ -39,6 +44,8 @@ export interface PurchaseRequestsTable {
   amount_cents: BigintColumn;
   currency: Generated<string>;
   status: Generated<PurchaseRequestStatus>;
+  description: Generated<string>;
+  category: Generated<PurchaseRequestCategory>;
   created_at: Generated<Date>;
   updated_at: Generated<Date>;
 }

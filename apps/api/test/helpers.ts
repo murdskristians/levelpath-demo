@@ -6,6 +6,13 @@ import { inject } from 'vitest';
 import { AppModule } from '../src/app.module.js';
 import { DatabaseService } from '../src/db/database.service.js';
 import { DB_CONFIG, type DbConfig } from '../src/db/db-config.js';
+import { MockProvider } from '../src/suggestions/mock.provider.js';
+import {
+  DEFAULT_SUGGESTION_DEADLINE_MS,
+  SUGGESTION_DEADLINE_MS,
+  SUGGESTION_PROVIDER,
+  type SuggestionProvider,
+} from '../src/suggestions/suggestion-provider.js';
 
 // Helpers for the database and HTTP tests. They connect to this run's own database,
 // which test/global-setup.mjs created and handed over as `testDb`.
@@ -100,11 +107,21 @@ export function appRoleClient(): Promise<pg.Client> {
   return connect(testDb().app);
 }
 
-/** The real app on a free port, pointed at this run's database. Close it when done. */
-export async function startApp(): Promise<{ app: INestApplication; url: string }> {
+/**
+ * The real app on a free port, pointed at this run's database. Close it when done.
+ * The suggestion provider is **always** overridden (the MockProvider unless a test gives
+ * one), so no HTTP test reads LLM_PROVIDER or reaches a real model (criterion 15).
+ */
+export async function startApp(
+  options: { suggestionProvider?: SuggestionProvider; suggestionDeadlineMs?: number } = {},
+): Promise<{ app: INestApplication; url: string }> {
   const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
     .overrideProvider(DB_CONFIG)
     .useValue(appDbConfig())
+    .overrideProvider(SUGGESTION_PROVIDER)
+    .useValue(options.suggestionProvider ?? new MockProvider())
+    .overrideProvider(SUGGESTION_DEADLINE_MS)
+    .useValue(options.suggestionDeadlineMs ?? DEFAULT_SUGGESTION_DEADLINE_MS)
     .compile();
   const app = moduleRef.createNestApplication({ logger: false });
   await app.listen(0, '127.0.0.1');

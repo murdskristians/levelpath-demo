@@ -8,20 +8,22 @@
 
 Every route needs `X-User-Id` (the global `AuthGuard`). The tenant and the caller come from `@CurrentUser()`, never from the body, query or path.
 
-| Route                                  | Who           | Body                    | Success                                                                   | Errors                                                                      |
-| -------------------------------------- | ------------- | ----------------------- | ------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
-| `GET /suppliers`                       | anyone        | -                       | `200 Supplier[]`, the caller's company, by name                           | 401                                                                         |
-| `GET /purchase-requests/mine`          | anyone        | -                       | `200 PurchaseRequest[]` the caller created, newest first                  | 401                                                                         |
-| `GET /purchase-requests/to-decide`     | approver      | -                       | `200 PurchaseRequest[]`: submitted, of the caller's company, oldest first | 401, 403 for a requester                                                    |
-| `POST /purchase-requests`              | anyone        | `CreatePurchaseRequest` | `201 PurchaseRequest`, status `draft`, requester is the caller            | 400 invalid body, 404 unknown supplier                                      |
-| `POST /purchase-requests/:id/submit`   | its requester | -                       | `200 PurchaseRequest`, status `submitted`                                 | 404 not the caller's or not found, 409 not a draft                          |
-| `POST /purchase-requests/:id/decision` | approver      | `Decision`              | `200 PurchaseRequest`, status `approved` or `rejected`, with `decision`   | 400, 403 a requester or the request's own requester, 404, 409 not submitted |
+| Route                                  | Who           | Body                    | Success                                                                         | Errors                                                                      |
+| -------------------------------------- | ------------- | ----------------------- | ------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| `GET /suppliers`                       | anyone        | -                       | `200 Supplier[]`, the caller's company, by name                                 | 401                                                                         |
+| `GET /purchase-requests/mine`          | anyone        | -                       | `200 PurchaseRequest[]` the caller created, newest first                        | 401                                                                         |
+| `GET /purchase-requests/to-decide`     | approver      | -                       | `200 PurchaseRequest[]`: submitted, of the caller's company, oldest first       | 401, 403 for a requester                                                    |
+| `POST /purchase-requests`              | anyone        | `CreatePurchaseRequest` | `201 PurchaseRequest`, status `draft`, requester is the caller                  | 400 invalid body, 404 unknown supplier                                      |
+| `POST /purchase-requests/:id/submit`   | its requester | -                       | `200 PurchaseRequest`, status `submitted`                                       | 404 not the caller's or not found, 409 not a draft                          |
+| `POST /purchase-requests/:id/decision` | approver      | `Decision`              | `200 PurchaseRequest`, status `approved` or `rejected`, with `decision`         | 400, 403 a requester or the request's own requester, 404, 409 not submitted |
+| `POST /purchase-requests/suggestion`   | anyone        | `SuggestionRequest`     | `200 SuggestionResponse`; `suggestion: null` on any LLM problem; writes nothing | 400 invalid body, 401                                                       |
 
 - **404, never 403, for something the caller may not see:** another tenant's id, or another requester's draft, behaves like an id that doesn't exist.
 - **403 is only for what reveals nothing:**
   - a requester calling an approver-only route: the role is checked before any lookup, so the answer is the same for every id;
   - an approver deciding their own request, which they can see anyway.
 - `:id` must be a UUID: anything else is a 404.
+- **`POST /purchase-requests/suggestion`** (Phase 4, [spec](purchase-request-suggestion.md)) never answers 5xx for an LLM problem: an invalid answer after one repair, the 15 s deadline, a refusal, `max_tokens` or a provider error all give `200 {"suggestion": null}`. The suppliers the model may pick from are the caller's own, read through `withTenant`; a `supplierId` outside them becomes `null`.
 - **Errors** have the shape `{ "statusCode": n, "message": "…" }`. A 400 adds `"issues": [{ "path": "…", "message": "…" }]` from Zod.
 
 ## Shapes (`packages/shared`, Zod)
@@ -30,6 +32,7 @@ Every route needs `X-User-Id` (the global `AuthGuard`). The tenant and the calle
 USER_ROLES = ['requester', 'approver']
 PURCHASE_REQUEST_STATUSES = ['draft', 'submitted', 'approved', 'rejected']
 APPROVAL_DECISIONS = ['approved', 'rejected']
+PURCHASE_REQUEST_CATEGORIES = ['hardware', 'software', 'office_supplies', 'services', 'travel', 'other']
 
 Supplier = { id: uuid, name: string }
 Person = { id: uuid, name: string }
@@ -39,6 +42,8 @@ CreatePurchaseRequest = {          // strict: unknown keys (an id, a tenantId) a
   amountCents: integer, 0..100_000_000_00,
   currency: /^[A-Z]{3}$/ (default "EUR"),
   supplierId: uuid,
+  category: one of PURCHASE_REQUEST_CATEGORIES,     // Phase 4, required
+  description: string (trimmed, 0..2000, default ""), // Phase 4
 }
 
 Decision = {                       // strict
@@ -47,11 +52,27 @@ Decision = {                       // strict
 }
 
 PurchaseRequest = {
-  id: uuid, title, amountCents: integer, currency, status,
+  id: uuid, title, amountCents: integer, currency, status, category, description,
   supplier: Supplier, requester: Person,
   createdAt: ISO string, updatedAt: ISO string,
   decision: null | { decision, comment: string | null, approver: Person, decidedAt: ISO string },
 }
+
+// Phase 4: Suggest fields
+SuggestionRequest = {              // strict: no suppliers, no tenantId
+  description: string (trimmed, 1..2000),
+}
+
+Suggestion = {                     // strict; also the JSON Schema sent to the model
+  title: string (trimmed, 1..200),
+  category: one of PURCHASE_REQUEST_CATEGORIES,
+  quantity: integer 1..1_000_000 | null,
+  amountCents: integer 0..100_000_000_00 | null,   // the total, not per item
+  currency: /^[A-Z]{3}$/ | null,
+  supplierId: uuid | null,                          // one of the caller's suppliers, or null
+}
+
+SuggestionResponse = { suggestion: Suggestion | null }
 ```
 
 - `amountCents` is an integer number in the API (the database's `bigint` is converted; the cap keeps it exact).
