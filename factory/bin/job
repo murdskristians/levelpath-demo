@@ -579,6 +579,12 @@ def advance(job, stage):
         if shots:
             body += f"\n\n{shots}"
         if job["pr"]:
+            body += (f"\n\n#### Next steps\n\n"
+                     f"1. Before merging: `/try {job['pr']}` runs this PR on your machine.\n"
+                     f"2. Merge it on GitHub, or give feedback with `/factory`.\n"
+                     f"3. After the merge: `/factory run` (or `factory/bin/job queue`) marks the job "
+                     f"merged and removes `.worktrees/{job['id']}/`; `factory/jobs/{job['id']}/` stays "
+                     f"as the job's record.")
             if gh_json("pr", "view", str(job["pr"]), "--json", "isDraft")["isDraft"]:
                 gh("pr", "ready", str(job["pr"]))
             comment("pr", job["pr"], body)
