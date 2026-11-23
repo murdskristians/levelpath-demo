@@ -703,6 +703,19 @@ describe('App', () => {
       expect(header().getByRole('button', { name: 'Switch to dark theme' })).toBeTruthy();
     });
 
+    it('still switches for the session when saving fails', () => {
+      mockFetch({});
+      vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+        throw new Error('full');
+      });
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      render(<App />);
+      fireEvent.click(screen.getByRole('button', { name: 'Switch to dark theme' }));
+      expect(theme()).toBe('dark');
+      expect(screen.getByRole('button', { name: 'Switch to light theme' })).toBeTruthy();
+      expect(warn).toHaveBeenCalled();
+    });
+
     it('keeps the choice across a reload, against the system setting', () => {
       mockFetch({});
       stubMedia(false);
