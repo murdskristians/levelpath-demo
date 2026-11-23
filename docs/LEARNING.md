@@ -212,3 +212,15 @@ One entry per new concept: what it is, why it matters, where it lives in this re
 - **What:** Each suggestion writes one JSON line: provider, model, latency, attempts, validation failures, outcome, reason, error class, and the description's length and the first 12 hex characters of its SHA-256. Never the description, the model's output, `err.message`, a key or a name.
 - **Why it matters:** A purchase description can hold names, prices or anything a user pastes. The hash still lets you see that the same text failed three times, and the length and latency explain most problems, without the log becoming a second copy of user data.
 - **Where:** the `llm_suggestion` line at the end of `suggest` in [suggestions.service.ts](../apps/api/src/suggestions/suggestions.service.ts); the log tests in [suggestions.service.spec.ts](../apps/api/src/suggestions/suggestions.service.spec.ts).
+
+## One always-running check to require, when the others are path-filtered (Phase 5)
+
+- **What:** `harness-tests` and `mock-evals` run only when their paths change. Branch protection can't require them: a job skipped by its `if` reports no result, and a required check with no result waits forever. So a final `ci` job `needs` every other job, runs `if: always()`, and fails only when one of them failed or was cancelled. `ci` is the only check branch protection requires.
+- **Why it matters:** Required checks have to exist on every PR. One summary job turns "skipped" into an explicit pass and "failed" into a block, so adding or path-filtering a job later never changes the protection settings. It also catches a failure in the job that decides the paths (`changes`): its dependants are skipped, but `ci` sees the failure.
+- **Where:** the `changes` and `ci` jobs in [ci.yml](../.github/workflows/ci.yml); the setup in [HARNESS.md](HARNESS.md#ci).
+
+## `pull_request`, not `pull_request_target`, on a public repo (Phase 5)
+
+- **What:** Every workflow here runs on `pull_request`. On a PR from a fork, that event gives the workflow a read-only token and no secrets. `pull_request_target` runs in the base branch's context with secrets and a write token, so a workflow that checks out the PR's code on it hands that code the keys: the fork's author controls the scripts that run. The review job also skips fork PRs by name, and its prompt is static text, never the PR's title or body.
+- **Why it matters:** On a public repo, anyone can open a PR, and its code runs in CI. Secrets must never meet code a stranger wrote. The cost: fork PRs get the gate but no Claude review, which is the right trade for a repo with one maintainer.
+- **Where:** [ci.yml](../.github/workflows/ci.yml), [review.yml](../.github/workflows/review.yml), [evals-real.yml](../.github/workflows/evals-real.yml).

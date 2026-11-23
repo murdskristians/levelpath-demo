@@ -538,3 +538,16 @@ Format:
   - The four review agents (`reviewer-bugs`, `reviewer-spec`, `reviewer-security`, `verifier`) say: write the file with the Write tool before replying, never put the review in the reply, and quote the error if the write fails.
   - `/review` step 3 and `/verify` step 5 check that the files exist, resume a reviewer once to write its own file, then tell Chris. The orchestrator never writes a review file itself.
 - **Why:** the file is what the next round, the approver and Chris read. A review that exists only in one session's chat is lost to all of them, and an orchestrator that writes it hides the gap.
+
+## 2026-11-23: CI runs the gate on every PR (Phase 5)
+
+- **What went wrong:** nothing on GitHub checked a PR. The gate and the reviews ran only on the machine that built the branch, so a PR's green status was its author's word, and a check could fail silently for days on the one machine that ran it (the U+FFFD check, 2026-11-22). The 2026-11-17 Phase 1 evidence entry also promised that Phase 5 would run the harness tests in CI; there was no CI.
+- **Before:** branch protection required a PR and nothing else. The harness tests ran when someone remembered.
+- **After:** three workflows (`docs/HARNESS.md`, "CI"):
+  - `ci.yml` runs `factory/checks.sh` itself with Postgres, the harness tests when `.claude/`, `factory/` or `adws/` change, and the mock evals (every case must pass) when `CLAUDE.md`, `.claude/`, the prompt or `evals/` change. One `if: always()` job, `ci`, is the required check.
+  - `review.yml` posts one advisory Claude review by `REVIEW.md`, for branches in this repo only.
+  - `evals-real.yml` runs the real-model evals only when Chris starts it.
+
+  Planning found two things the plan's first draft had wrong: the review action edits a comment in place only when it posts as the Claude GitHub app (`use_sticky_comment` matches `claude[bot]`), so the app is part of the setup; and a branch protection body with `required_pull_request_reviews: null` would have dropped the PR requirement, so the command keeps it with 0 approvals.
+
+- **Why:** a check only one machine runs is a claim, not a check. CI runs the same script on a clean machine for every PR, where Chris can see it before he merges.
