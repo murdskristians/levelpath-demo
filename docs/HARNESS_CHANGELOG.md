@@ -522,3 +522,19 @@ Format:
 - **Before:** the mock's first matching category won, quantities were digits only, and amounts needed a currency symbol. A mock eval run always showed three known failures, so a new failure could hide among them.
 - **After:** the longest keyword found wins (`printer paper` and `docking station` are keywords), `one` to `twelve` count as quantities, and `EUR 1,200` and `1,200.00 EUR` are amounts (spec requirement 12, `mock.provider.ts`, new cases in `mock.provider.spec.ts`). `pnpm eval` against the mock gives `15/15 (100%)`.
 - **Why:** with the mock at 100%, any failing case in a mock run is a real regression in the runner, the route or the mock. The cost: a mock run no longer says anything about suggestion quality; only a run against the real model does, which `evals/run.mjs` now says.
+
+## 2026-11-22: The U+FFFD check in the gate never ran
+
+- **What went wrong:** the check added on 2026-11-21 called `git grep … --. ':!pnpm-lock.yaml'`. `--.` is not `-- .`, so git stopped with `fatal: option '--.' must come before non-option arguments` (exit 128), and `if` read that as "no match". Every gate since #9 passed it without searching; the fatal line sits at the end of every `checks.log`. The 2026-11-21 entry's "it failed on `main`'s `CLAUDE.md`" can't have been true of the committed line. Phase 4's review round 4 found it (the spec reviewer noted the line; the orchestrator traced it).
+- **Before:** a check that couldn't run looked the same as a check that passed.
+- **After:** `checks.sh` uses `-- .` and keeps git grep's exit code: 0 (a match) fails, 1 (none) passes, anything else fails with "the U+FFFD check could not run". Checked three ways: a clean tree passes; an untracked file with U+FFFD fails and is named; the old `--.` typo now fails with exit 128 instead of passing.
+- **Why:** a guard has to fail closed. Testing a new check against a known-bad file before trusting it would have caught this on day one.
+
+## 2026-11-22: Review files returned in the reply instead of written
+
+- **What went wrong:** twice in Phase 4, an agent finished without writing its file: the round-2 verifier (`review-verify.md`) and the round-4 `reviewer-spec`, which said it had "no file-write tool in this run" and pasted the review into its reply. It did have Write (it was in its tool list; it never called it). The orchestrator first blamed the agent's tools, then saved the pasted review itself, which hides the gap. The factory (L2) already refuses to advance without every `review-<r>.md`; `/review` and `/verify` (L1) didn't check.
+- **Before:** the L1 commands read the files and assumed they existed.
+- **After:**
+  - The four review agents (`reviewer-bugs`, `reviewer-spec`, `reviewer-security`, `verifier`) say: write the file with the Write tool before replying, never put the review in the reply, and quote the error if the write fails.
+  - `/review` step 3 and `/verify` step 5 check that the files exist, resume a reviewer once to write its own file, then tell Chris. The orchestrator never writes a review file itself.
+- **Why:** the file is what the next round, the approver and Chris read. A review that exists only in one session's chat is lost to all of them, and an orchestrator that writes it hides the gap.

@@ -12,8 +12,15 @@ set -euo pipefail
 
 # A replacement character (U+FFFD) means text was written in the wrong encoding.
 # Prettier and the tests don't notice it; job 003 merged one into CLAUDE.md.
-if git grep --untracked -nI $'\xEF\xBF\xBD' --. ':!pnpm-lock.yaml'; then
+# git grep exits 0 on a match, 1 on none, and above 1 when it can't search:
+# that fails the gate too, so the check can't pass by not running.
+found=0
+git grep --untracked -nI $'\xEF\xBF\xBD' -- . ':!pnpm-lock.yaml' || found=$?
+if [ "$found" -eq 0 ]; then
   echo "checks: U+FFFD (a broken character) in the files above; rewrite them as UTF-8" >&2
+  exit 1
+elif [ "$found" -ne 1 ]; then
+  echo "checks: the U+FFFD check could not run (git grep exit $found)" >&2
   exit 1
 fi
 

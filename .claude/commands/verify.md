@@ -30,7 +30,11 @@ slug: $1
    Review round <N>. Ports: API 5090, web 5091.
    ```
 
-5. Read `agents/<slug>/round-<N>/review-verify.md`.
+5. Read `agents/<slug>/round-<N>/review-verify.md`. If it is missing, resume
+   the verifier once with SendMessage, saying that its file is missing and it
+   must write it now with the Write tool, from what it already ran, without
+   starting the app again. If it is still missing, tell Chris. Never write it
+   yourself, not even from the verifier's reply.
 
 ## Report
 
