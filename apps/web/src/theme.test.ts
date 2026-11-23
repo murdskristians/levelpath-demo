@@ -55,5 +55,8 @@ describe('theme', () => {
     expect(inline).toContain('prefers-color-scheme');
     expect(inline).toContain('documentElement.dataset.theme');
     expect(inline).toMatch(/try\s*{[\s\S]*}\s*catch/);
+    // Reading storage has its own try, so a throwing storage still reaches the system check.
+    expect(inline.indexOf('matchMedia')).toBeGreaterThan(inline.indexOf('catch'));
+    expect(inline.match(/try\s*{/g)).toHaveLength(2);
   });
 });
