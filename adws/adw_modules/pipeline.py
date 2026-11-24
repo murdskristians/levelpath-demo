@@ -291,6 +291,7 @@ def hand_over(state: ADWState, logger) -> None:
         lines += [f"| {k} | {v} |" for k, v in rows]
         lines.append("")
     lines += screenshots(state, rd)
+    lines += next_steps(state)
     total = sum((state.get("costs") or {}).values())
     lines.append(f"_Run `{state.get('adw_id')}`: {n} round(s), ${total:.2f} API-equivalent. "
                  f"Files: `agents/{state.get('adw_id')}/`._")
@@ -306,6 +307,20 @@ def hand_over(state: ADWState, logger) -> None:
     state.update(stage="needs-human")
     state.save("needs-human")
     logger.info(f"needs-human: {title}")
+
+
+def next_steps(state: ADWState) -> list:
+    """The hand-over's "#### Next steps": check, merge, then clean up. The run
+    can't know when a person merges, so the comment names the cleanup command."""
+    pr, issue, adw_id = state.get("pr_number"), state.get("issue_number"), state.get("adw_id")
+    if not pr:
+        return []
+    return ["#### Next steps", "",
+            f"1. Before merging: `/try {pr}` runs this PR on your machine.",
+            "2. Merge it on GitHub, or close it.",
+            f"3. Then clean up: `uv run adws/adw_cleanup_iso.py {issue} {adw_id}`. It removes "
+            f"`trees/{adw_id}/` and the local branch; `agents/{adw_id}/` stays as the run's record.",
+            ""]
 
 
 def screenshots(state: ADWState, rd: Path) -> list:

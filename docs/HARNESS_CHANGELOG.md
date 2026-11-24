@@ -545,3 +545,28 @@ Format:
 - **Before:** the plan assumed Actions runs on the account. The 2026-11-17 Phase 1 evidence entry promised the harness tests in CI.
 - **After:** no workflows. `factory/checks.sh` (install, build, lint, test, the U+FFFD check) stays the only gate, run by every driver before the PR. The factory and the ADWs post its result, the reviews and the screenshots on the PR, so the evidence is still public. Branch protection stays as it was: a PR is required, with 0 approvals, and only Chris merges. The intent, spec and plan in `docs/*/ci-automated-review.md` stay as the record of the design, which can be brought back if Actions becomes available.
 - **Why:** a required check that can never run blocks every PR or teaches people to ignore red. When a user says a tool isn't available to them, check it (`gh run` on a throwaway PR, or the account's Actions status) before planning around it, instead of answering from what is usually true.
+
+## 2026-11-23: The hand-over comment stopped at "before merging"
+
+- **What went wrong:** the first demo run (ADW `9521ae8f`, PR #16) ended with a comment whose last step was "`/try 16` before merging". Nothing said what to do after the merge, so Chris had to ask how to clean up the run's worktree.
+- **Before:** the factory's and the ADWs' hand-over comments carried the decision, the round's verdicts and the screenshots. The cleanup command was only in `README.md` and `adws/README.md`.
+- **After:** both comments end with a fixed "Next steps" section, written by the script and not by the approver: `/try <pr>`, merge or close, then the cleanup. For an ADW run that is `uv run adws/adw_cleanup_iso.py <issue> <adw-id>`; for a factory job, `/factory run` or `factory/bin/job queue`. The README has a "Where a run lives" table for all three drivers.
+- **Why:** the PR is where a person finishes a run. Every command they need belongs in it, written by code so no agent can leave it out.
+
+## 2026-11-23: The planner wrote its spec through the shell
+
+- **What went wrong:** in ADW run `9521ae8f` the planner wrote `spec.md` with `cat > spec.md <<'EOF' …` in Bash. The spec's backticks broke the quoting (`unexpected EOF while looking for matching` `` ` ``, exit 2). It recovered with the Write tool on the next step, but the control room showed a red error a minute into the run.
+- **Before:** the reviewers' and the verifier's prompts said to write with the Write tool; the planner's said nothing.
+- **After:** `planner.md` says to write `spec.md` and `plan.md` with the Write tool, never through Bash. `CLAUDE.md`, "Things Claude gets wrong", says the same for every agent and session.
+- **Why:** a heredoc full of markdown is fragile in any shell. The Write tool takes the text as it is.
+
+## 2026-11-24: L2's builder wasn't allowed to commit
+
+- **What went wrong:** factory job 005 (the light/dark toggle, issue #17) built the feature and passed `factory/checks.sh`, then stopped: its `git commit` was refused by Claude Code's auto-mode classifier ("Destructive or Unwanted Actions"). No push, no PR. L3 (ADW `9521ae8f`) built the same feature without trouble.
+- **Why only L2:** an ADW agent is its own `claude -p` process started with permission prompts off, so only `guard.py` judges it. A factory agent is a subagent of the chat that runs `/factory`, so it gets that chat's permissions: in auto mode, anything outside `settings.json`'s allow list goes to the classifier, and a background subagent can't ask. The allow list had `git status`, `diff` and `log`, but not the four commands that deliver the work. And `CLAUDE.md` said "No commits unless Chris asks", with no word on the builder.
+- **Before:** jobs 002–004 committed only because the session that ran them happened to allow it.
+- **After:**
+  - `.claude/settings.json` allows `git add`, `git commit`, `git push` and `gh pr create`. Force-pushes and merges stay denied, and `guard.py` still blocks pushes to `main`, merges and approvals.
+  - `CLAUDE.md` names the exception: in a factory or ADW run, the builder commits and pushes its own job branch and opens its draft PR.
+  - Job 005 was discarded and issue #17 closed, so the run could be repeated from scratch.
+- **Why:** a step every run needs must be allowed by the repo's own settings, not by whichever session happens to run it. The two drivers must behave the same for the same role.

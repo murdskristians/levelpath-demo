@@ -63,7 +63,7 @@ Every driver ends with a PR that **only Chris merges**. Before merging, `/try <p
 - **Never silently fail.** Every `catch` logs and rethrows, or returns a typed error.
 - **Read the whole file** before changing it.
 - **`.env` is off limits.** Use `.env.sample`. The guard hook blocks reads and environment dumps.
-- **No commits unless Chris asks. No merges, ever.** The guard blocks `gh pr merge`, approvals and pushes to `main`.
+- **No commits unless Chris asks. No merges, ever.** The guard blocks `gh pr merge`, approvals and pushes to `main`. One standing exception: in a factory or ADW run, the `builder` commits and pushes its own job branch (`factory/<job-id>`, `adw/<adw-id>-…`) and opens its draft PR. That is the job Chris started.
 - **pnpm only.** Python in `adws/` runs with `uv run` (Avast: `UV_NATIVE_TLS=1`). The hooks are stdlib-only and run with `python3`.
 - **Log lessons.**
   - A corrected mistake or a caught problem goes in `docs/HARNESS_CHANGELOG.md` (before → after → why).
@@ -83,5 +83,7 @@ For behaviour, run the app on your ports and exercise the acceptance criteria (t
 - **Remembered library versions.** Before naming a library, runner or tool, check its current major, module format (ESM or CJS) and peer ranges with `pnpm view <pkg> dist-tags peerDependencies`. Phase 0 planned Jest for Nest 12, which is ESM-only, and `typescript@latest` (7.x), which `typescript-eslint` rejects.
 
 - **Dropping something Chris built inside a plan.** A capability from one of the source harnesses (for example tac-combined's live UI) is never dropped as one line of a plan: ask it as its own decision, with options and a recommendation.
+
+- **Writing files through the shell.** Write and edit files with the Write and Edit tools, never with `cat > file <<'EOF'` in Bash. Markdown and code are full of backticks and `$`, which break the shell's quoting: the planner of ADW run `9521ae8f` lost a step to `unexpected EOF while looking for matching` `` ` ``.
 
 - **Publishing code without checking where it came from.** Before code from another repository goes into this public one, check that repository's visibility (`gh repo view <repo> --json visibility`). From a private source, only ideas come over: write the code here.

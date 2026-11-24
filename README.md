@@ -51,6 +51,26 @@ Also needs [Claude Code](https://claude.com/claude-code), `gh` (logged in), `uv`
 
 Each driver ends with a pull request labelled `factory:needs-human`. To check it locally, run `/try <pr>`; then merge it on GitHub. Nothing in the harness can merge. Afterwards, `/factory run` (or `factory/bin/job queue`) closes out factory jobs; for an ADW run, use `uv run adws/adw_cleanup_iso.py <issue> <adw_id>`.
 
+### Where a run lives
+
+Every run happens on your machine. The factory and the ADWs never touch your checkout or its branch: each run gets its own **worktree** (a second working folder of the same repo, on its own branch, with its own ports) for the code, and a **job folder** for its paperwork. Both are gitignored.
+
+| Driver        | Start it                                                                                     | Code (worktree, branch)                           | Paperwork (job folder)                 | On the board         | After you merge the PR                                                                                        |
+| ------------- | -------------------------------------------------------------------------------------------- | ------------------------------------------------- | -------------------------------------- | -------------------- | ------------------------------------------------------------------------------------------------------------- |
+| L1 pair       | `/intent <idea>` in Claude Code                                                              | your own checkout, on a branch you create         | `agents/<slug>/`                       | no card              | nothing to clean up                                                                                           |
+| L2 factory    | label an issue `factory`, then `/factory run <n>` (or `/factory <feature>` to file it too)   | `.worktrees/<job-id>/`, branch `factory/<job-id>` | `factory/jobs/<job-id>/`               | a card, `chat` badge | `/factory run` or `factory/bin/job queue`: marks it merged, removes the worktree                              |
+| L3 unattended | the control room's **Start run** box, `uv run adws/adw_sdlc_iso.py <n>`, or an `adw` comment | `trees/<adw-id>/`, branch `adw/<adw-id>-<slug>`   | `agents/<adw-id>/` (an 8-character id) | a card, `ADW` badge  | `uv run adws/adw_cleanup_iso.py <issue> <adw-id>`: removes the worktree and the local branch, marks it merged |
+
+The job folder holds the files the agents hand to each other: `issue.md`, `intake.md`, `spec.md`, `plan.md`, `build.md`, `round-N/` (the gate's `checks.md`, each `review-*.md`, the verifier's `shots/`) and `decision.md`. It stays after cleanup as the run's record; the control room reads it.
+
+A run's life, L3 as the example:
+
+1. Type the feature in the control room (`factory/bin/serve`, http://127.0.0.1:8000) and click **Start run**. It files a GitHub issue and starts the pipeline.
+2. Watch it: click the card, then **Agents** for each agent live, or **Files** for its paperwork.
+3. When the card reaches **Needs human**, the PR is ready. Run `/try <pr>` to click through it locally.
+4. Merge it on GitHub (or close it).
+5. Run `uv run adws/adw_cleanup_iso.py <issue> <adw-id>`.
+
 ## Layout
 
 ```
