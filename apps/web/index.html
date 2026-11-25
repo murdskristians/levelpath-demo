@@ -4,6 +4,29 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Levelpath Demo</title>
+    <script>
+      (function () {
+        try {
+          var t = null;
+          try {
+            var s = localStorage.getItem('levelpath.theme');
+            if (s === 'light' || s === 'dark') t = s;
+          } catch (e) {}
+          if (!t) {
+            try {
+              t =
+                typeof matchMedia === 'function' &&
+                matchMedia('(prefers-color-scheme: dark)').matches
+                  ? 'dark'
+                  : 'light';
+            } catch (e) {
+              t = 'light';
+            }
+          }
+          document.documentElement.setAttribute('data-theme', t);
+        } catch (e) {}
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
