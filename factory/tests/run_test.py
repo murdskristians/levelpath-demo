@@ -152,6 +152,10 @@ r = sh([BASH, "-lc", f"factory/bin/route {jid}"], proj, env=env)
 check("route runs and records reviewers (risk picks the models)",
       r.returncode == 0 and "reviewers verify sonnet, bugs sonnet, spec haiku; planner and builder sonnet" in r.stdout,
       r.stdout + r.stderr)
+r = sh([BASH, "-lc", f"factory/bin/route --intake 'factory/jobs/{jid}/intake.md'"], proj, env=env)
+check("route --intake prints the same agent set for L1",
+      r.returncode == 0 and json.loads(r.stdout) == {"reviewers": {"verify": "sonnet", "bugs": "sonnet", "spec": "haiku"},
+                                                    "planner": "sonnet", "builder": "sonnet"}, r.stdout + r.stderr)
 agents = json.loads((jd / "job.json").read_text())["agents"]
 check("route records planner and builder models", agents.get("planner") == "sonnet" and agents.get("builder") == "sonnet",
       agents)

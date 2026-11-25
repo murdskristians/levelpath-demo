@@ -589,3 +589,15 @@ Format:
   12. **L1 cost.** The pair chat wrote the code itself on Opus: $6.53 of $7.41, from 8.2M tokens of growing context. → After plan approval, `/plan` spawns the `builder` agent on Sonnet in a "pair run" mode (uncommitted, no push, no PR); the chat steers and reviews.
 - **Tests:** `factory/tests/run_test.py` (52 checks, 9 new: tree id, service down, kept records, cost window and orchestrator, ports stopped after review, screenshot fallback); `test_hooks.py` 81.
 - **Why this prevents a repeat:** the reports now show what a run really cost and checked, and the jobs nobody was doing (stopping servers, keeping records, showing assumptions) are done by scripts or named in the role that owns them.
+
+## 2026-11-25: L1 ran different agents from L2 and L3
+
+- **What was missing:** Chris asked for the three drivers to run the same agents on the same input, so the only difference between two batches would be graphify. L1 didn't: its chat wrote `intake.md` by hand instead of running `intake`, it called the planner twice (spec, then plan), its reviewers were a fixed trio on their frontmatter models (Sonnet spec, plus security) instead of the routed set (Haiku spec for low risk), and it had no approver.
+- **Before:** the L1 commands imitated the pipeline; L2 and L3 ran it.
+- **After:**
+  - `factory/bin/route --intake <intake.md>` prints the routed agent set; L1 saves it as `agents/<slug>/agents.json`.
+  - `/spec` runs `intake`, routes, runs `scout` on high risk, and calls the planner with the factory's prompt (spec and plan in one call).
+  - `/plan` shows the planner's plan, re-planning only if Chris changed the spec, and builds with the routed builder model.
+  - `/verify` and `/review` use the routed models and reviewers; `/review` runs the `approver` when every review passes, and offers the factory's rule on CHANGES (the builder fixes every Important finding).
+  - `docs/experiments/theme-toggle-graphify-protocol.md` fixes what is held equal in the six runs.
+- **Why:** a comparison of drivers, or of a tool across drivers, means something only when the agents, prompts and models are the same and the driver alone differs.

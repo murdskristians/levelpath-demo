@@ -26,8 +26,9 @@ slug: $1
      `pnpm db:up`) and stop. Run `/verify` again once it's up.
    - `GATE: FAIL`: show Chris the failing lines from `checks.log` and stop:
      fix first.
-4. Spawn the `verifier` agent with this prompt (ports 5090 and 5091 are
-   reserved for L1):
+4. Spawn the `verifier` agent, with model `agents.json` `reviewers.verify`
+   when `agents/<slug>/agents.json` exists (from `/spec`), and this prompt
+   (ports 5090 and 5091 are reserved for L1):
 
    ```
    Job: <slug>. Job folder: <repo>/agents/<slug>/. Main checkout: <repo>. Worktree: <repo>. Branch: <current branch>. Base: origin/main. Issue: none.
