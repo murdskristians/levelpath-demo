@@ -26,7 +26,7 @@ One app on chosen ports (agents always do this): `API_PORT=<a> pnpm --filter @le
 ## Architecture
 
 - `apps/api`: NestJS 12 (ESM-only: relative imports end in `.js`), Vitest. Modules, controllers, services, DI.
-- `apps/web`: React 19 + Vite, Vitest + Testing Library. Calls `/api/…` (Vite proxies it to the API on `API_PORT`, default 3000, stripping `/api`); a header user picker (dev stub, not a login) sets `X-User-Id`.
+- `apps/web`: React 19 + Vite, Vitest + Testing Library. Calls `/api/…` (Vite proxies it to the API on `API_PORT`, default 3000, stripping `/api`); a header user picker (dev stub, not a login) sets `X-User-Id`. Light/dark theme: `src/theme.ts` (`levelpath.theme` key, `data-theme` on `<html>`, set early by an inline script in `index.html`).
 - `packages/shared`: ESM. The value lists and the API contract (`docs/specs/purchase-requests-contract.md`) as Zod schemas, used by both apps: the API validates bodies with them, the web app its forms. `pnpm build` builds it first; to run one app alone, `pnpm --filter @levelpath/shared build` first.
 - `db/`: `migrations/` (plain numbered `.sql`, applied as the owner by `pnpm db:migrate`; never edit one that is on `main`) and `seed.sql`. RLS is enabled and forced on every tenant table.
 - `apps/api/src/db/`: `DatabaseService`, the only way into Postgres: `withTenant(tenantId, trx => …)` for all tenant data (Kysely, as the non-owner app role). `apps/api/src/auth/`: the global `AuthGuard`, `@Public()`, `@CurrentUser()`.

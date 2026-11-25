@@ -212,3 +212,9 @@ One entry per new concept: what it is, why it matters, where it lives in this re
 - **What:** Each suggestion writes one JSON line: provider, model, latency, attempts, validation failures, outcome, reason, error class, and the description's length and the first 12 hex characters of its SHA-256. Never the description, the model's output, `err.message`, a key or a name.
 - **Why it matters:** A purchase description can hold names, prices or anything a user pastes. The hash still lets you see that the same text failed three times, and the length and latency explain most problems, without the log becoming a second copy of user data.
 - **Where:** the `llm_suggestion` line at the end of `suggest` in [suggestions.service.ts](../apps/api/src/suggestions/suggestions.service.ts); the log tests in [suggestions.service.spec.ts](../apps/api/src/suggestions/suggestions.service.spec.ts).
+
+## Themes: a `data-theme` attribute plus custom properties
+
+- **What:** Every colour in `App.css` is a CSS custom property. `:root` holds the light values and `:root[data-theme='dark']` overrides them. The attribute comes from `localStorage` (`levelpath.theme`), else from `prefers-color-scheme`. A small inline script in `index.html` sets it before the page paints.
+- **Why it matters:** A pure `@media (prefers-color-scheme)` block can't hold the user's override, so the attribute is needed anyway. React only runs after the first paint, so without the inline script a dark-mode user would see a light flash. A test checks the palette's contrast ratios, so a colour change can't quietly break legibility.
+- **Where:** [theme.ts](../apps/web/src/theme.ts), [ThemeToggle.tsx](../apps/web/src/components/ThemeToggle.tsx), [index.html](../apps/web/index.html), [theme.test.tsx](../apps/web/src/theme.test.tsx).
