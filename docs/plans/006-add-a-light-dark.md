@@ -31,30 +31,30 @@ None. Plain CSS, React 19 and Vitest 5.1 (`pnpm view vitest version` gives 5.1.2
 
 Custom properties (light = today's value, dark = new). Light hex values must be copied exactly from the current `App.css`.
 
-| Property | Light | Dark | Used by |
-| --- | --- | --- | --- |
-| `--bg` | #ffffff | #121212 | body background |
-| `--text` | #1a1a1a | #e5e7eb | body, input text |
-| `--text-muted` | #4b5563 | #9ca3af | footer, `.note` |
-| `--text-form-note` | #374151 | #d1d5db | `.form-note` |
-| `--border` | #d1d5db | #4b5563 | header, request list items |
-| `--border-strong` | #4b5563 | #9ca3af | inputs, selects, textareas |
-| `--border-empty` | #6b7280 | #9ca3af | `.empty-state` |
-| `--primary` | #1d4ed8 | #60a5fa | button bg and border, focus outline, secondary text |
-| `--on-primary` | #ffffff | #0b1220 | button text |
-| `--secondary-bg` | #ffffff | #121212 | `button.secondary` |
-| `--input-bg` | #ffffff | #1e1e1e | inputs |
-| `--disabled-bg` | #e5e7eb | #1f2937 | `button:disabled` |
-| `--disabled-border` | #d1d5db | #374151 | `button:disabled` |
-| `--disabled-text` | #4b5563 | #9ca3af | `button:disabled` |
-| `--badge-draft-bg` / `-fg` | #e5e7eb / #1f2937 | #374151 / #f3f4f6 | `.badge-draft` |
-| `--badge-submitted-bg` / `-fg` | #dbeafe / #1e3a8a | #1e3a8a / #dbeafe | `.badge-submitted`, `.suggested-tag` |
-| `--badge-approved-bg` / `-fg` | #dcfce7 / #14532d | #14532d / #dcfce7 | `.badge-approved` |
-| `--badge-rejected-bg` / `-fg` | #fee2e2 / #7f1d1d | #7f1d1d / #fee2e2 | `.badge-rejected` |
-| `--error-bg` | #fef2f2 | #450a0a | `.error-alert` |
-| `--error-text` | #7f1d1d | #fecaca | `.error-alert` |
-| `--error-border` | #991b1b | #f87171 | `.error-alert` border |
-| `--field-error` | #991b1b | #fca5a5 | `.field-error` |
+| Property                       | Light             | Dark              | Used by                                             |
+| ------------------------------ | ----------------- | ----------------- | --------------------------------------------------- |
+| `--bg`                         | #ffffff           | #121212           | body background                                     |
+| `--text`                       | #1a1a1a           | #e5e7eb           | body, input text                                    |
+| `--text-muted`                 | #4b5563           | #9ca3af           | footer, `.note`                                     |
+| `--text-form-note`             | #374151           | #d1d5db           | `.form-note`                                        |
+| `--border`                     | #d1d5db           | #4b5563           | header, request list items                          |
+| `--border-strong`              | #4b5563           | #9ca3af           | inputs, selects, textareas                          |
+| `--border-empty`               | #6b7280           | #9ca3af           | `.empty-state`                                      |
+| `--primary`                    | #1d4ed8           | #60a5fa           | button bg and border, focus outline, secondary text |
+| `--on-primary`                 | #ffffff           | #0b1220           | button text                                         |
+| `--secondary-bg`               | #ffffff           | #121212           | `button.secondary`                                  |
+| `--input-bg`                   | #ffffff           | #1e1e1e           | inputs                                              |
+| `--disabled-bg`                | #e5e7eb           | #1f2937           | `button:disabled`                                   |
+| `--disabled-border`            | #d1d5db           | #374151           | `button:disabled`                                   |
+| `--disabled-text`              | #4b5563           | #9ca3af           | `button:disabled`                                   |
+| `--badge-draft-bg` / `-fg`     | #e5e7eb / #1f2937 | #374151 / #f3f4f6 | `.badge-draft`                                      |
+| `--badge-submitted-bg` / `-fg` | #dbeafe / #1e3a8a | #1e3a8a / #dbeafe | `.badge-submitted`, `.suggested-tag`                |
+| `--badge-approved-bg` / `-fg`  | #dcfce7 / #14532d | #14532d / #dcfce7 | `.badge-approved`                                   |
+| `--badge-rejected-bg` / `-fg`  | #fee2e2 / #7f1d1d | #7f1d1d / #fee2e2 | `.badge-rejected`                                   |
+| `--error-bg`                   | #fef2f2           | #450a0a           | `.error-alert`                                      |
+| `--error-text`                 | #7f1d1d           | #fecaca           | `.error-alert`                                      |
+| `--error-border`               | #991b1b           | #f87171           | `.error-alert` border                               |
+| `--field-error`                | #991b1b           | #fca5a5           | `.field-error`                                      |
 
 Expected contrast (computed from WCAG relative luminance, the contrast test confirms): dark text on bg about 14:1, muted on bg about 7:1, on-primary on primary about 7:1, primary on bg about 7:1, disabled text on disabled bg about 5.8:1, badge and error pairs 7:1 or better, borders/focus vs bg 3:1 or better (`--border` is decorative and exempt, `--border-strong`, `--border-empty` and `--primary` are checked at 3:1).
 
