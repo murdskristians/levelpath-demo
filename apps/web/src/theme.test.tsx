@@ -265,6 +265,10 @@ describe('theme', () => {
       ['--border-empty', '--bg'],
     ];
 
+    it('dark --border is at least 3:1 against the page', () => {
+      expect(contrast(dark['--border'], dark['--bg'])).toBeGreaterThanOrEqual(3);
+    });
+
     describe.each([
       ['light', light],
       ['dark', dark],

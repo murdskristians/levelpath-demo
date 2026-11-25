@@ -11,7 +11,9 @@
           try {
             var s = localStorage.getItem('levelpath.theme');
             if (s === 'light' || s === 'dark') t = s;
-          } catch (e) {}
+          } catch (e) {
+            // expected: storage blocked, fall through to the OS preference
+          }
           if (!t) {
             try {
               t =
@@ -24,7 +26,9 @@
             }
           }
           document.documentElement.setAttribute('data-theme', t);
-        } catch (e) {}
+        } catch (e) {
+          // expected: never throw, leave the page unthemed
+        }
       })();
     </script>
   </head>
