@@ -39,6 +39,10 @@ absolute paths under the worktree.
 - **The artifact trail:** `docs/specs/<job>.md` and `docs/plans/<job>.md` are
   committed in the branch, and the docs the spec asks for are updated.
 - **Assumptions:** spec Assumptions the diff silently changed.
+- **Browser and manual criteria are the verifier's.** The verifier runs in
+  parallel with you and checks them in a real browser. In Traceability, mark
+  such a criterion `verifier`. It is never a finding, not even when build.md
+  leaves it unchecked.
 
 ## Write review-spec.md
 

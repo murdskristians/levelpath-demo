@@ -55,13 +55,22 @@ build.md as usual.
    `decision.md` and every round folder too. The feedback wins where they
    disagree.
 
+**Finding code.** If `<main checkout>/graphify-out/graph.json` exists, find
+code with the graph first: `cd <main checkout> && graphify query
+"<question>"`, `graphify explain "<symbol>"` or `graphify path "<A>" "<B>"`.
+Then read only the lines it points to. Otherwise, use Grep and Glob. Never run
+`graphify update`. The graph describes the base branch, so read your own
+changes in the worktree.
+
 ## Build
 
 - Run `cd <worktree> && git branch --show-current` first. It must print the
   branch from your header. If it doesn't, stop and write a BLOCKED build.md.
 - In round 1: run `pnpm install --frozen-lockfile` in the worktree, and commit
   copies of the spec and plan as `docs/specs/<job>.md` and
-  `docs/plans/<job>.md`, so the PR carries its own artifact trail.
+  `docs/plans/<job>.md`, so the PR carries its own artifact trail. Format the
+  copies with `pnpm exec prettier --write <both paths>` first: the gate's lint
+  checks them.
 - Match the surrounding code: idioms, naming, imports, comment density.
 - Make the simplest change that fully meets the spec. No fallbacks, hidden
   defaults or extras it doesn't ask for.
@@ -79,6 +88,8 @@ build.md as usual.
 - **Round 1, and a round after a failed gate:** run
   `cd <worktree> && bash <main checkout>/factory/checks.sh`. It must pass: the
   gate runs exactly this after you, and no reviewer starts until it passes.
+  Run it last, when every file, docs included, is in place: a file changed
+  after it is unchecked.
 - **A round that answers review findings or feedback:** run the checks for what
   you changed, not the whole suite again: `pnpm lint`, and
   `pnpm --filter <package> build` and `pnpm --filter <package> test` for each

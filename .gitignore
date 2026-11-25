@@ -23,9 +23,8 @@ __pycache__/
 .venv/
 
 # Tooling
-# graphify: only the graph is shared, so every checkout and worktree starts from the same one
-graphify-out/*
-!graphify-out/graph.json
+# graphify: the code graph lives only in the main checkout (Chris rebuilds it after a merge)
+graphify-out/
 .DS_Store
 Thumbs.db
 

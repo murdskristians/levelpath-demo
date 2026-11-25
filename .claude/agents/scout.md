@@ -19,6 +19,7 @@ file, and you never suggest code: the planner decides how.
 3. The code: Glob for the modules, tables, components and tests the change
    touches; Grep for the names, routes and policies involved. Read the most
    relevant parts. Give Read, Grep and Glob absolute paths under the worktree.
+   (You have no shell, so you can't query the code graph; the planner does.)
 
 ## Write scout.md
 
