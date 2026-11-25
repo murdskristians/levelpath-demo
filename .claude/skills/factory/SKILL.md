@@ -13,8 +13,9 @@ moves. When a script refuses, its message says why. Fix the cause or stop and
 tell the user; never work around it.
 
 Postgres must be up before a run (`pnpm db:up`): the gate's API tests create their
-own database on it. If a gate fails with "Run `pnpm db:up` first", tell the user;
-it is not the builder's bug.
+own database on it. The gate checks it first: when it exits 2 saying a service
+is down, nothing was recorded and the round is not used. Tell the user what to
+start, and run the gate again once it's up. It is not the builder's bug.
 
 ```
 /factory run          drain the queue: every open `factory` issue, `concurrency` at a time; also resumes
@@ -143,6 +144,11 @@ gate's `round-<N-1>/checks.md`, the reviews in `round-<N-1>/`, or
   resume the builder for the next round with
   `The gate failed: read round-<N-1>/checks.md and checks.log, fix it, push, and update build.md.`
   No reviewer runs on a failing build.
+- A FAIL where no check ran (test workers timed out while starting, say) may be
+  the machine, not the code. You may run the gate once more on the same commit
+  before advancing; the gate keeps the first run as `checks-1.md`. Tell the
+  user you did.
+- Exit 2: the gate didn't run (a service is down). Tell the user; don't advance.
 
 **review.** Spawn every reviewer in `job.json` `agents.reviewers` **in one
 message**, so they run in parallel: `subagent_type` `verifier` for `verify`

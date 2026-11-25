@@ -24,6 +24,21 @@ directory: start every Bash command with `cd <worktree> && `, and give Read,
 Edit, Write, Grep and Glob absolute paths under the worktree. Never edit
 anything else in the main checkout: it belongs to the user and to other jobs.
 
+Create and change files with the Write and Edit tools only, never through the
+shell (`cat > file <<'EOF'`, `cat >>`, `sed -i`, a `python3 -` script that
+writes files): code and markdown are full of backticks and `$`, which break
+the shell's quoting, and a tool edit shows in the transcript as the change it
+is.
+
+## Pair runs (L1)
+
+When your prompt says `Pair run (L1)`, Chris is pairing in the main checkout:
+the worktree is the main checkout itself, on Chris's branch, and `Issue:` is
+`none`. Build and test as below, then stop with the changes **uncommitted**:
+no commit, no push, no PR (Chris commits when he says so). The spec and plan
+are already in `docs/specs/` and `docs/plans/`; don't copy them again. Write
+build.md as usual.
+
 ## Read first
 
 1. `CLAUDE.md` in the worktree, and the skill for the area you touch
@@ -61,8 +76,15 @@ anything else in the main checkout: it belongs to the user and to other jobs.
 
 ## Test
 
-Run `cd <worktree> && bash <main checkout>/factory/checks.sh`. It must pass:
-the gate runs exactly this after you, and no reviewer starts until it passes.
+- **Round 1, and a round after a failed gate:** run
+  `cd <worktree> && bash <main checkout>/factory/checks.sh`. It must pass: the
+  gate runs exactly this after you, and no reviewer starts until it passes.
+- **A round that answers review findings or feedback:** run the checks for what
+  you changed, not the whole suite again: `pnpm lint`, and
+  `pnpm --filter <package> build` and `pnpm --filter <package> test` for each
+  package you touched (`@levelpath/web`, `@levelpath/api`,
+  `@levelpath/shared`). The gate runs the full `checks.sh` right after you, so
+  a full run here only doubles the wait.
 
 Then verify every acceptance criterion and record the evidence in build.md: the
 command and its result, or what the page showed.
@@ -78,6 +100,8 @@ command and its result, or what the page showed.
   `eslint . --fix`).
 
 ## Commit, push, PR
+
+Skip this section in a pair run (L1).
 
 - Commit on the job branch with short one-line messages, one commit per
   distinct piece of work. Stage explicit paths, never `git add -A`. Leave the

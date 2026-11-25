@@ -9,7 +9,7 @@ Stack: NestJS 12 (ESM), PostgreSQL with RLS, React 19 + Vite, TypeScript everywh
 One set of agent roles, three ways to drive them (the autonomy dial):
 
 ```
- L1 pair        /intent → /spec → /plan → build together → /verify → /review
+ L1 pair        /intent → /spec → /plan → builder agent → /verify → /review
  L2 supervised  /factory run <issue>            (a skill in a Claude Code session, with a dashboard)
  watch all     factory/bin/serve → http://127.0.0.1:8000   (the control room: Board + live Agents)
  L3 unattended  uv run adws/adw_sdlc_iso.py <issue>, or an `adw` comment on the issue

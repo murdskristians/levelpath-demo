@@ -15,9 +15,10 @@ slug: $1
 ## Steps
 
 1. Use the round folder of the last `/verify <slug>` run when its
-   `checks.md` has `COMMIT:` equal to `git rev-parse HEAD`. Otherwise create
-   the next round and run the gate as in `/verify` step 3. Reviewers start only
-   on a passing gate.
+   `checks.md` has `COMMIT:` equal to what `factory/bin/gate --tree <repo>`
+   prints now (the commit plus a hash of the uncommitted changes, so an edit
+   since `/verify` counts as new code). Otherwise run the gate for the next
+   round as in `/verify` steps 2 and 3. Reviewers start only on a passing gate.
 2. Spawn `reviewer-bugs`, `reviewer-spec` and `reviewer-security` **in one
    message**, so they run in parallel, each with this prompt:
 

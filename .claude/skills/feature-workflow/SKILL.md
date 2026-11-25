@@ -18,7 +18,7 @@ intent → spec → plan → build → gate → verify + review → PR → Chris
 
 | Driver | You run | Use it when | Orchestrator |
 | --- | --- | --- | --- |
-| **L1 pair** | `/intent` → `/spec` → `/plan` → build together → `/verify` → `/review` | High risk or new to you: RLS, auth, the LLM call. You approve each step. | You |
+| **L1 pair** | `/intent` → `/spec` → `/plan` → the `builder` agent builds → `/verify` → `/review` | High risk or new to you: RLS, auth, the LLM call. You approve each step. | You |
 | **L2 supervised** | `/intent` → issue labelled `factory` → `/factory run <n>` | Several independent jobs at once, with intake, routing and the dashboard. | The `factory` skill in your session |
 | **L3 unattended** | an issue, then comment `adw` (trigger running) or `uv run adws/adw_sdlc_iso.py <n>` | Well-scoped work with no session open. | Python (`adws/`) |
 

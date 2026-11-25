@@ -37,6 +37,27 @@ slug: $1
 
 ## After approval
 
-Build it together in this session, following `docs/plans/<slug>.md` and the
-skills it names. Then run `/verify <slug>` and `/review <slug>`. When it's
-merged, set `.claude/task-type` back to `feature`.
+The `builder` agent builds it, the same agent the factory and the ADWs use,
+on Sonnet. Writing the code in this chat would carry the whole conversation
+into every turn on the chat's model, which made an L1 build cost several
+times an L2 or L3 one. You steer: Chris's choices at approval go in the
+prompt, and you review what comes back.
+
+1. Copy `docs/plans/<slug>.md` over `agents/<slug>/plan.md` if Chris edited
+   it at approval, and add his choices to the prompt below.
+2. Spawn `builder` with model `sonnet` and this prompt:
+
+   ```
+   Job: <slug>. Job folder: <repo>/agents/<slug>/. Main checkout: <repo>. Worktree: <repo>. Branch: <current branch>. Base: origin/main. Issue: none.
+   Build round 1. Ports: API 5090, web 5091. Pair run (L1): leave the changes uncommitted.
+   <Chris's choices at plan approval, if any>
+   ```
+
+3. When it returns, stop anything left on its ports:
+   `factory/bin/port stop 5090` and `factory/bin/port stop 5091`.
+4. Show Chris `agents/<slug>/build.md`: the summary, the criteria with their
+   evidence, and the deviations from the plan. Small changes he asks for are
+   normal edits here; for a larger one, resume the builder with SendMessage.
+
+Then run `/verify <slug>` and `/review <slug>`. When it's merged, set
+`.claude/task-type` back to `feature`.

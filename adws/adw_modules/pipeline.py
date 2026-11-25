@@ -227,10 +227,21 @@ def review(state: ADWState, logger) -> Dict[str, str]:
     return verdicts
 
 
+def stop_ports(state: ADWState) -> None:
+    """Stop whatever still listens on the run's ports. The builder and the verifier
+    are told to stop their dev servers, and sometimes don't; the pipeline makes sure."""
+    for port in (state.get("backend_port"), state.get("frontend_port")):
+        if port:
+            subprocess.run([sys.executable, "-X", "utf8", str(roles.REPO / "factory" / "bin" / "port"),
+                            "stop", str(port)], capture_output=True, text=True)
+
+
 def run_rounds(state: ADWState, logger, reason: str) -> None:
     """build → gate → review, until every reviewer passes or the rounds run out."""
     while True:
-        if not build(state, logger, reason):
+        built = build(state, logger, reason)
+        stop_ports(state)
+        if not built:
             return
         n = state.get("round")
         if not gate(state, logger):
@@ -243,6 +254,7 @@ def run_rounds(state: ADWState, logger, reason: str) -> None:
                       f"fix it, push, and update build.md.")
             continue
         verdicts = review(state, logger)
+        stop_ports(state)
         if all(v == "PASS" for v in verdicts.values()):
             approve(state, logger)
             return
@@ -290,7 +302,7 @@ def hand_over(state: ADWState, logger) -> None:
             lines.append(f"| gate | {roles.first_line(rd / 'checks.md')} |")
         lines += [f"| {k} | {v} |" for k, v in rows]
         lines.append("")
-    lines += screenshots(state, rd)
+    lines += screenshots(state, n)
     lines += next_steps(state)
     total = sum((state.get("costs") or {}).values())
     lines.append(f"_Run `{state.get('adw_id')}`: {n} round(s), ${total:.2f} API-equivalent. "
@@ -323,11 +335,17 @@ def next_steps(state: ADWState) -> list:
             ""]
 
 
-def screenshots(state: ADWState, rd: Path) -> list:
+def screenshots(state: ADWState, n: int) -> list:
     """The hand-over's "#### Screenshots" section, from the factory's uploader
-    (`factory/bin/shots`), which the L2 driver uses too. Evidence, not a reason to
-    fail the hand-over: a problem leaves the section out."""
-    found = sorted(glob.glob(str(rd / "shots" / "*.png")))
+    (`factory/bin/shots`), which the L2 driver uses too: the verifier's images of
+    the latest round that has any. Evidence, not a reason to fail the hand-over:
+    a problem leaves the section out."""
+    shot_round, found = None, []
+    for k in range(n, 0, -1):
+        found = sorted(glob.glob(str(roles.round_dir(state.get("adw_id"), k) / "shots" / "*.png")))
+        if found:
+            shot_round = k
+            break
     if not found:
         return []
     res = subprocess.run([sys.executable, "-X", "utf8", str(roles.REPO / "factory" / "bin" / "shots"),
@@ -335,7 +353,11 @@ def screenshots(state: ADWState, rd: Path) -> list:
                          cwd=str(roles.REPO), capture_output=True, text=True, encoding="utf-8")
     if res.stderr.strip():
         print(res.stderr.strip(), file=sys.stderr)
-    return [res.stdout.strip(), ""] if res.returncode == 0 and res.stdout.strip() else []
+    md = res.stdout.strip() if res.returncode == 0 else ""
+    if md and shot_round != n:
+        md = md.replace("#### Screenshots", f"#### Screenshots\n\nFrom round {shot_round}; the verifier "
+                                            f"took none in round {n}.", 1)
+    return [md, ""] if md else []
 
 
 # ---- entry points the phase scripts call -----------------------------------------------

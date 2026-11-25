@@ -39,7 +39,7 @@ One app on chosen ports (agents always do this): `API_PORT=<a> pnpm --filter @le
 
 One set of roles in `.claude/agents/`, three drivers:
 
-- **L1 (pair):** `/intent` → `/spec` → `/plan` → build together → `/verify` → `/review`.
+- **L1 (pair):** `/intent` → `/spec` → `/plan` → the `builder` agent builds (uncommitted, in this checkout) → `/verify` → `/review`.
 - **L2 (supervised):** `/factory run`.
 - **L3 (unattended):** `uv run adws/adw_sdlc_iso.py <issue>`, or an `adw` comment.
 

@@ -4,18 +4,32 @@
 Usage:
   gate <job-id>                     factory job: write round-N/checks.md; exit 0 on PASS, 1 on FAIL
   gate --run <worktree> <round-dir> any driver (ADWs, /verify): the same, for a worktree and a round folder
+  gate --tree <worktree>            print the id the gate records as COMMIT for this worktree
   gate --hook                       builder Stop hook: run the checks once, exit 2 on failure
 
 The gate runs the main checkout's factory/checks.sh inside the job's worktree,
 so a branch can't change the checks it is judged by. It also fails when the
 branch modifies or deletes a file matching config.json `protected_paths`
 (fnmatch patterns, where `*` also matches `/`). Adding new files is fine.
+
+COMMIT is the HEAD commit, plus `+dirty:<hash>` when the worktree has
+uncommitted changes (L1 pairs in the main checkout without committing), so a
+round's record names the exact code it judged.
+
+Before running the checks, the gate checks the services in config.json
+`gate_services` (a TCP address each). When one is down it exits 2 without
+writing a round: a stopped database is not a failed build.
+
+A second run in the same round folder keeps the earlier record as
+checks-<k>.md and checks-<k>.log.
 """
 
 import fnmatch
+import hashlib
 import json
 import os
 import shutil
+import socket
 import subprocess
 import sys
 import time
@@ -78,6 +92,49 @@ def protected_changes(worktree):
     return hits
 
 
+def tree_id(worktree):
+    """HEAD, plus a hash of the uncommitted changes (tracked diffs and untracked
+    files that aren't ignored) when there are any."""
+    commit = git(worktree, "rev-parse", "HEAD").strip()
+    if not git(worktree, "status", "--porcelain").strip():
+        return commit
+    digest = hashlib.sha256(
+        subprocess.run(["git", "diff", "HEAD", "--binary"], cwd=worktree, capture_output=True).stdout)
+    for rel in sorted(git(worktree, "ls-files", "--others", "--exclude-standard").splitlines()):
+        digest.update(rel.encode())
+        try:
+            digest.update((Path(worktree) / rel).read_bytes())
+        except OSError as e:
+            die(f"can't read {rel} to identify the worktree's changes: {e}")
+    return f"{commit}+dirty:{digest.hexdigest()[:12]}"
+
+
+def services_down():
+    """The config.json `gate_services` that don't answer: [(address, hint)]."""
+    down = []
+    for service in CONFIG.get("gate_services", []):
+        host, _, port = service["tcp"].rpartition(":")
+        try:
+            socket.create_connection((host, int(port)), timeout=3).close()
+        except OSError:
+            down.append((service["tcp"], service.get("hint", "")))
+    return down
+
+
+def keep_earlier_run(round_dir):
+    """Rename an earlier checks.md/.log in this round to checks-<k>.*, so a re-run
+    never hides that the first run failed. Returns the kept file names."""
+    if not (round_dir / "checks.md").exists():
+        return []
+    k = 1
+    while (round_dir / f"checks-{k}.md").exists():
+        k += 1
+    (round_dir / "checks.md").replace(round_dir / f"checks-{k}.md")
+    if (round_dir / "checks.log").exists():
+        (round_dir / "checks.log").replace(round_dir / f"checks-{k}.log")
+    return sorted(p.name for p in round_dir.glob("checks-*.md"))
+
+
 def run_checks(worktree):
     start = time.monotonic()
     res = subprocess.run([find_bash(), CHECKS.as_posix()], cwd=worktree, capture_output=True, text=True)
@@ -93,9 +150,15 @@ def gate(job_id):
 
 
 def run_gate(worktree, round_dir, label):
+    down = services_down()
+    if down:
+        die("not run, a service the checks need is down: "
+            + "; ".join(f"{addr} ({hint})" if hint else addr for addr, hint in down)
+            + ". Start it, then run the gate again. No round was recorded.")
     round_dir = Path(round_dir)
     round_dir.mkdir(parents=True, exist_ok=True)
-    commit = git(worktree, "rev-parse", "HEAD").strip()
+    commit = tree_id(worktree)
+    earlier = keep_earlier_run(round_dir)
     protected = protected_changes(worktree)
     skipped = protected is None
     protected = protected or []
@@ -107,8 +170,11 @@ def run_gate(worktree, round_dir, label):
         f"checks.sh {'passed' if code == 0 else f'failed with exit {code}'} in {seconds}s",
         "Protected paths: " + ("not checked (no origin/" + CONFIG["base_branch"] + " yet)" if skipped
                                else "changed: " + ", ".join(protected) if protected else "none changed"),
-        f"Commit {commit[:7]}",
+        f"Commit {commit[:7]}" + (" with uncommitted changes" if "+dirty:" in commit else ""),
     ]
+    if earlier:
+        summary.append("Earlier runs in this round: " + ", ".join(
+            f"{name} ({(round_dir / name).read_text().splitlines()[0]})" for name in earlier))
     (round_dir / "checks.md").write_text(
         f"GATE: {verdict}\nCOMMIT: {commit}\n\n"
         "## Summary\n" + "\n".join(f"- {s}" for s in summary) + "\n\n"
@@ -158,6 +224,8 @@ def main(argv):
         gate(argv[0])
     elif len(argv) == 3 and argv[0] == "--run":
         run_gate(argv[1], argv[2], Path(argv[2]).name)
+    elif len(argv) == 2 and argv[0] == "--tree":
+        print(tree_id(argv[1]))
     else:
         die(__doc__.strip())
 
