@@ -32,6 +32,11 @@ backticks, which break the shell's quoting and waste a step.
    (`nestjs-endpoint`, `rls-data-access`, `llm-call`), and `REVIEW.md`: what the
    reviewers will hold the change to.
 5. The code the change touches. Find the real files; don't guess names.
+   **Finding code.** If `<main checkout>/graphify-out/graph.json` exists, find
+   code with the graph first: `cd <main checkout> && graphify query
+   "<question>"`, `graphify explain "<symbol>"` or `graphify path "<A>" "<B>"`.
+   Then read only the lines it points to. Otherwise, use Grep and Glob. Never
+   run `graphify update`.
 6. The templates: `docs/templates/spec.md` and `docs/templates/plan.md`. Follow
    their sections exactly.
 
@@ -71,6 +76,10 @@ backticks, which break the shell's quoting and waste a step.
 - For data access: a test that proves tenant A cannot select, update or delete
   tenant B's rows, even with a crafted ID.
 - Reuse what exists: name the existing module, helper or pattern and require it.
+- Code in the plan follows CLAUDE.md's Rules, because the builder copies it.
+  Every `catch` logs (`console.warn`/`console.error` in the web app, the logger
+  in the API) and rethrows, or returns a typed fallback. Never a comment-only
+  `catch`, not even in an inline script.
 - Include the doc updates the change needs (`CLAUDE.md`, `docs/LEARNING.md`).
 
 When you're done, reply with one line: `SPEC: <short title>`.

@@ -601,3 +601,23 @@ Format:
   - `/verify` and `/review` use the routed models and reviewers; `/review` runs the `approver` when every review passes, and offers the factory's rule on CHANGES (the builder fixes every Important finding).
   - `docs/experiments/theme-toggle-graphify-protocol.md` fixes what is held equal in the six runs.
 - **Why:** a comparison of drivers, or of a tool across drivers, means something only when the agents, prompts and models are the same and the driver alone differs.
+
+## 2026-11-26: graphify was installed but never used
+
+- **What went wrong:** in run 3 of the theme toggle (`docs/experiments/theme-toggle-graphify.md`), no agent or chat ran `graphify query`, `explain` or `path` once, though every agent loaded the CLAUDE.md rules and the hook added its hint on every tool call (110 times in L1 and L2). One builder ran `graphify update .` because a reviewer quoted CLAUDE.md, and its PR carried a rewritten `graph.json`.
+- **Before:** the graph was committed, so every worktree had one; the rules were in CLAUDE.md only ("before your first grep…", "after modifying code, run `graphify update .`"); the role files said "Glob and Grep".
+- **After:**
+  - a "Finding code" step in `planner.md` and `builder.md`: when `<main checkout>/graphify-out/graph.json` exists, query it from the main checkout first, otherwise Grep and Glob; never `graphify update`;
+  - `graphify-out/` is git-ignored again and lives only in the main checkout, rebuilt by Chris after a merge; the CLAUDE.md section says so and drops the update and "large diff" lines;
+  - the step is conditional, so the A/B test (`docs/experiments/graphify-ab-protocol.md`) switches graphify by the graph's presence alone, with identical prompts on both sides.
+- **Why this prevents a repeat:** an agent follows its role's steps over a general rule, so the tool is now a step in the role; and no run can change or commit the shared graph.
+
+## 2026-11-26: three slips that decided run 3's rounds
+
+- **What went wrong:**
+  - **L2 escalated over a comment-only `catch`** that its plan prescribed (the same slip as run 2); the bugs reviewer passed it again.
+  - **L3's spec reviewer made "the manual browser check isn't done" Important** while the verifier was doing that check in parallel and passed it; that cost a whole round.
+  - **L2's round 1 failed the gate on Prettier** in the spec and plan copies the builder committed after its own checks.
+- **Before:** the planner's sketches weren't held to CLAUDE.md's Rules; the spec reviewer traced manual criteria like any other; the builder copied the docs and could change files after `checks.sh`.
+- **After:** `planner.md`: code in the plan follows the Rules, every `catch` logs. `reviewer-spec.md`: browser and manual criteria are marked `verifier`, never a finding. `builder.md`: format the spec and plan copies with Prettier, and run `checks.sh` last.
+- **Why this prevents a repeat:** each slip is stopped where it starts (the plan, the reviewer's scope, the builder's order of steps) instead of costing a review round later.
