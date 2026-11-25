@@ -218,3 +218,9 @@ One entry per new concept: what it is, why it matters, where it lives in this re
 - **What:** [graphify](https://github.com/Graphify-Labs/graphify) parses the repo into a graph of files, symbols and the links between them (`graphify update .`, no LLM). Agents ask it with `graphify query "<question>"`, `explain` and `path` instead of grepping and reading whole files. Hooks in `.claude/settings.json` remind every agent before a Grep, Read, Glob or Bash call; they never block one.
 - **Why it matters:** most of an agent's cost is reading. On the theme toggle, a Sonnet builder read 0.5M to 1.4M tokens; if the graph points it at the right lines first, it should read less. Whether it does is what the experiment measures.
 - **Where:** the graphify section of [CLAUDE.md](../CLAUDE.md), `.claude/skills/graphify/`, and the committed `graphify-out/graph.json`. It is committed so that the main checkout and every factory or ADW worktree start from the same graph. The measurements are in [docs/experiments/](experiments/).
+
+## Theme before first paint (theme toggle)
+
+- **What:** The theme is the `data-theme` attribute on `<html>`; the colors are CSS custom properties that the dark block overrides. A small inline script in `index.html` sets the attribute from `localStorage` or the OS preference before the page paints. `App` then owns the state, above the keyed `Dashboard`.
+- **Why it matters:** The React bundle runs after first paint, so setting the theme there would flash the wrong one. The state sits above `Dashboard` because that component remounts on every user switch and would reset the theme. The inline script repeats a few lines of `resolveTheme`; a test keeps them in step.
+- **Where:** the script in [index.html](../apps/web/index.html), [theme.ts](../apps/web/src/theme.ts), [App.css](../apps/web/src/App.css), the tests in [theme.test.tsx](../apps/web/src/theme.test.tsx).
