@@ -213,6 +213,12 @@ One entry per new concept: what it is, why it matters, where it lives in this re
 - **Why it matters:** A purchase description can hold names, prices or anything a user pastes. The hash still lets you see that the same text failed three times, and the length and latency explain most problems, without the log becoming a second copy of user data.
 - **Where:** the `llm_suggestion` line at the end of `suggest` in [suggestions.service.ts](../apps/api/src/suggestions/suggestions.service.ts); the log tests in [suggestions.service.spec.ts](../apps/api/src/suggestions/suggestions.service.spec.ts).
 
+## Theme tokens and a pre-paint script (light/dark toggle)
+
+- **What:** every color in `App.css` is a CSS custom property, defined once under `:root` (light) and once under `:root[data-theme='dark']`. A `data-theme` attribute on `<html>` picks the set. A small inline script in `index.html` sets it before the body renders, from `localStorage` (`levelpath.theme`) or `prefers-color-scheme`; `theme.ts` holds the same rule for React.
+- **Why it matters:** React renders after the JavaScript bundle loads, so a theme set from React alone flashes the wrong colors first. The inline script runs before first paint. A contrast test reads the palette from the CSS and checks WCAG AA, so a color change that hurts readability fails a test.
+- **Where:** [App.css](../apps/web/src/App.css), [index.html](../apps/web/index.html), [theme.ts](../apps/web/src/theme.ts), [theme.test.tsx](../apps/web/src/theme.test.tsx).
+
 ## A code graph for agents: graphify (experiment)
 
 - **What:** [graphify](https://github.com/Graphify-Labs/graphify) parses the repo into a graph of files, symbols and the links between them (`graphify update .`, no LLM). Agents ask it with `graphify query "<question>"`, `explain` and `path` instead of grepping and reading whole files. Hooks in `.claude/settings.json` remind every agent before a Grep, Read, Glob or Bash call; they never block one.

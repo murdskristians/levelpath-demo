@@ -6,6 +6,7 @@ import { DecisionQueue } from './components/DecisionQueue';
 import { ErrorAlert } from './components/ErrorAlert';
 import { NewRequestForm } from './components/NewRequestForm';
 import { RequestList } from './components/RequestList';
+import { ThemeToggle } from './components/ThemeToggle';
 import { UserPicker } from './components/UserPicker';
 import { loadUserId, saveUserId } from './users';
 
@@ -127,7 +128,12 @@ export function App() {
     saveUserId(id);
     setUserId(id);
   }
-  const picker = <UserPicker userId={userId} onChange={pick} />;
+  const picker = (
+    <>
+      <UserPicker userId={userId} onChange={pick} />
+      <ThemeToggle />
+    </>
+  );
 
   return (
     <>
