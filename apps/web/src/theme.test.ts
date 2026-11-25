@@ -59,6 +59,11 @@ describe('inline script in index.html', () => {
   const html = readFileSync('index.html', 'utf8');
   const script = /<script>([\s\S]*?)<\/script>/.exec(html)?.[1] ?? '';
 
+  afterEach(() => {
+    localStorage.clear();
+    vi.unstubAllGlobals();
+  });
+
   /** Runs the script against a stubbed window and returns the data-theme it set. */
   function run(stored: string | null, osDark: boolean) {
     const attrs: Record<string, string> = {};
@@ -89,8 +94,6 @@ describe('inline script in index.html', () => {
     if (stored) localStorage.setItem(THEME_KEY, stored);
     stubOs(osDark);
     expect(resolveTheme()).toBe(expected);
-    localStorage.clear();
-    vi.unstubAllGlobals();
   });
 });
 
