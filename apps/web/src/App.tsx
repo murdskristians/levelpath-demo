@@ -1,12 +1,22 @@
 import type { PurchaseRequest, Supplier } from '@levelpath/shared';
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
 import './App.css';
 import { createApi, type Me } from './api';
 import { DecisionQueue } from './components/DecisionQueue';
 import { ErrorAlert } from './components/ErrorAlert';
 import { NewRequestForm } from './components/NewRequestForm';
 import { RequestList } from './components/RequestList';
+import { ThemeToggle } from './components/ThemeToggle';
 import { UserPicker } from './components/UserPicker';
+import { applyTheme, loadTheme, saveTheme, type Theme } from './theme';
 import { loadUserId, saveUserId } from './users';
 
 type DecideInput = { decision: 'approved' | 'rejected'; comment: string };
@@ -127,7 +137,19 @@ export function App() {
     saveUserId(id);
     setUserId(id);
   }
-  const picker = <UserPicker userId={userId} onChange={pick} />;
+  const [theme, setTheme] = useState<Theme>(loadTheme);
+  useLayoutEffect(() => applyTheme(theme), [theme]);
+  function toggleTheme() {
+    const next = theme === 'light' ? 'dark' : 'light';
+    saveTheme(next);
+    setTheme(next);
+  }
+  const picker = (
+    <>
+      <UserPicker userId={userId} onChange={pick} />
+      <ThemeToggle theme={theme} onToggle={toggleTheme} />
+    </>
+  );
 
   return (
     <>
