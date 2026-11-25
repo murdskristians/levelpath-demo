@@ -56,7 +56,7 @@ Then `python3 -X utf8 .claude/hooks/test_hooks.py`: 81 checks of every rule, off
 
 ### 2:00–3:15 L1: pairing (Phase 4, the LLM feature)
 
-> "For the risky, design-heavy work I pair. I bring the idea; the planner agent writes the spec and plan; I approve; we build together; then the same verifier and reviewers the factory uses check it."
+> "For the risky, design-heavy work I pair. I bring the idea; the planner agent writes the spec and plan; I approve; the same builder agent the factory uses writes the code while I steer; then the same verifier and reviewers check it."
 
 Walk the artifact trail of **Suggest fields**:
 

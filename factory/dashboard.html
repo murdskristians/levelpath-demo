@@ -440,6 +440,12 @@ function roundRow(job, n, v) {
   return `<div class="round"><span class="r">R${n}</span>${cells.join('')}</div>`
 }
 
+// A factory job's cost is its agents plus the orchestrator chat that ran them; an ADW has no chat.
+const jobCost = (job) => Number(job.cost_usd) + Number(job.orchestrator_usd || 0)
+const costTitle = (job) => job.orchestrator_usd
+  ? `agents $${Number(job.cost_usd).toFixed(2)} + orchestrator chat $${Number(job.orchestrator_usd).toFixed(2)}`
+  : 'agents'
+
 function elapsed(job) {
   const end = job.ended ? new Date(job.ended) : new Date()
   const min = Math.max(0, Math.floor((end - new Date(job.started)) / 60000))
@@ -467,7 +473,7 @@ function card(job, rounds) {
   const risk = job.intake?.risk
   const meta = [
     risk ? `<span class="risk-${esc(risk)}">${esc(risk)}</span>` : '',
-    `<span>$${Number(job.cost_usd).toFixed(2)}</span>`,
+    `<span title="${esc(costTitle(job))}">$${jobCost(job).toFixed(2)}</span>`,
     `<span>${elapsed(job)}</span>`,
   ].join('')
   return `
@@ -512,7 +518,7 @@ async function render() {
     $('banner').innerHTML = banner
   }
   const running = jobs.filter((j) => LIVE.has(j.stage)).length
-  const cost = jobs.reduce((sum, j) => sum + Number(j.cost_usd), 0)
+  const cost = jobs.reduce((sum, j) => sum + jobCost(j), 0)
   $('totals').textContent = `${running} running · $${cost.toFixed(2)} API-equivalent`
 }
 
@@ -590,7 +596,7 @@ async function refreshDrawer() {
   const job = jobs.find((j) => j.id === openJobId)
   if (!job) return
   if (drawerTab === 'agents') return refreshAgents(job)
-  $('d-num').textContent = `${job.id} · ${job.stage}${job.round ? ` · round ${job.round}` : ''} · $${Number(job.cost_usd).toFixed(2)} · ${elapsed(job)}`
+  $('d-num').textContent = `${job.id} · ${job.stage}${job.round ? ` · round ${job.round}` : ''} · $${jobCost(job).toFixed(2)} · ${elapsed(job)}`
   $('d-title').textContent = job.title
   $('d-links').innerHTML = links(job)
 
@@ -713,7 +719,7 @@ function eventRow(e) {
 
 // The run's agents, newest last, with the orchestrator first; the selected one's events stream in.
 async function refreshAgents(job) {
-  $('d-num').textContent = `${job.id} · ${job.stage}${job.round ? ` · round ${job.round}` : ''} · $${Number(job.cost_usd).toFixed(2)} · ${elapsed(job)}`
+  $('d-num').textContent = `${job.id} · ${job.stage}${job.round ? ` · round ${job.round}` : ''} · $${jobCost(job).toFixed(2)} · ${elapsed(job)}`
   $('d-title').textContent = job.title
   $('d-links').innerHTML = links(job)
   const data = await (await fetch(`api/agents?run=${encodeURIComponent(job.id)}`, { cache: 'no-store' })).json()

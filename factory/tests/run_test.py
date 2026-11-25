@@ -61,6 +61,10 @@ for rel in ["factory/bin/job", "factory/bin/gate", "factory/bin/route", "factory
             "factory/config.json", "factory/.gitattributes"]:
     (proj / rel).parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(SRC / rel, proj / rel)
+# The sandbox has no Postgres: its checks.sh needs no services. Section 5b tests the service check.
+config = json.loads((proj / "factory/config.json").read_text(encoding="utf-8"))
+config.pop("gate_services", None)
+(proj / "factory/config.json").write_text(json.dumps(config, indent=2), encoding="utf-8", newline="\n")
 (proj / "factory/checks.sh").write_text(
     '#!/usr/bin/env bash\nset -euo pipefail\n'
     'echo "checks ok ✓ ünïcode"\n'
@@ -148,6 +152,10 @@ r = sh([BASH, "-lc", f"factory/bin/route {jid}"], proj, env=env)
 check("route runs and records reviewers (risk picks the models)",
       r.returncode == 0 and "reviewers verify sonnet, bugs sonnet, spec haiku; planner and builder sonnet" in r.stdout,
       r.stdout + r.stderr)
+r = sh([BASH, "-lc", f"factory/bin/route --intake 'factory/jobs/{jid}/intake.md'"], proj, env=env)
+check("route --intake prints the same agent set for L1",
+      r.returncode == 0 and json.loads(r.stdout) == {"reviewers": {"verify": "sonnet", "bugs": "sonnet", "spec": "haiku"},
+                                                    "planner": "sonnet", "builder": "sonnet"}, r.stdout + r.stderr)
 agents = json.loads((jd / "job.json").read_text())["agents"]
 check("route records planner and builder models", agents.get("planner") == "sonnet" and agents.get("builder") == "sonnet",
       agents)
@@ -176,6 +184,28 @@ r = sh([BASH, "-lc", f"factory/bin/gate {jid} --merge"], proj, env=env)
 check("gate has no --merge mode", r.returncode != 0 and not (jd / "round-1/merge-checks.md").exists(),
       r.stdout + r.stderr)
 
+# ---- 5b. gate: the exact tree it judged, and a service that is down ----
+head = sh(["git", "rev-parse", "HEAD"], wt).stdout.strip()
+r = sh([BASH, "-lc", f"factory/bin/gate --tree '{wt}'"], proj, env=env)
+check("gate --tree on a clean worktree is HEAD", r.stdout.strip() == head, r.stdout + r.stderr)
+(Path(wt) / "scratch.txt").write_text("uncommitted\n")
+r = sh([BASH, "-lc", f"factory/bin/gate --tree '{wt}'"], proj, env=env)
+dirty = r.stdout.strip()
+check("gate --tree marks uncommitted changes", dirty.startswith(head + "+dirty:"), dirty)
+l1_round = BOX / "l1-round"
+sh([BASH, "-lc", f"factory/bin/gate --run '{wt}' '{l1_round.as_posix()}'"], proj, env=env)
+check("gate --run records the dirty tree as COMMIT",
+      f"COMMIT: {dirty}" in (l1_round / "checks.md").read_text(encoding="utf-8"))
+(Path(wt) / "scratch.txt").unlink()
+config["gate_services"] = [{"tcp": "127.0.0.1:1", "hint": "the test service"}]
+(proj / "factory/config.json").write_text(json.dumps(config), encoding="utf-8", newline="\n")
+down_round = BOX / "down-round"
+r = sh([BASH, "-lc", f"factory/bin/gate --run '{wt}' '{down_round.as_posix()}'"], proj, env=env)
+check("a service that is down: exit 2, nothing recorded",
+      r.returncode == 2 and "the test service" in r.stderr and not down_round.exists(), r.stdout + r.stderr)
+config.pop("gate_services")
+(proj / "factory/config.json").write_text(json.dumps(config), encoding="utf-8", newline="\n")
+
 # ---- 6. builder Stop hook, run the way Claude Code runs it, with a Windows-style project dir ----
 transcript = BOX / "transcript.jsonl"
 transcript.write_text(json.dumps({"message": {"content": f"Job: {jid}. Job folder: x/. Build round 1."}}) + "\n")
@@ -192,6 +222,14 @@ r = sh([BASH, "-lc", f"factory/bin/gate {jid}"], proj, env=env)
 check("gate FAIL on failing checks", r.returncode == 1 and "GATE: FAIL" in r.stdout, r.stdout + r.stderr)
 (Path(wt) / "FAIL_CHECKS").unlink()
 sh([BASH, "-lc", f"factory/bin/gate {jid}"], proj, env=env)
+rd1 = jd / "round-1"
+check("re-runs keep the earlier records (checks-1.md PASS, checks-2.md FAIL)",
+      (rd1 / "checks-1.md").read_text(encoding="utf-8").startswith("GATE: PASS")
+      and (rd1 / "checks-2.md").read_text(encoding="utf-8").startswith("GATE: FAIL")
+      and (rd1 / "checks-2.log").exists(), sorted(p.name for p in rd1.iterdir()))
+latest = (rd1 / "checks.md").read_text(encoding="utf-8")
+check("the latest checks.md passes and names the earlier runs",
+      latest.startswith("GATE: PASS") and "checks-2.md (GATE: FAIL)" in latest, latest[:400])
 
 # ---- 7. lock: a second process waits while the first holds the job ----
 holder = subprocess.Popen([sys.executable, "-X", "utf8", "-c",
@@ -218,14 +256,43 @@ folder = (jd.as_posix()[0].lower() + jd.as_posix()[1:]) + "/"
                   "usage": {"input_tokens": 1_000_000, "output_tokens": 0}}}) + "\n"
     + json.dumps({"type": "user", "message": {"content": "non-cp1252 bytes: \u0081 \u2192 ✓"}}) + "\n",
     encoding="utf-8")
+# an agent of an earlier job with the same id (it started before this job did): left out
+old = BOX / "claude-config/projects" / proj_key / "sess0/subagents"
+old.mkdir(parents=True)
+(old / "agent-old.jsonl").write_text(
+    json.dumps({"type": "user", "timestamp": "2020-01-01T00:00:00Z",
+                "message": {"content": f"Job: {jid}. Job folder: {folder}. Main checkout: x."}}) + "\n"
+    + json.dumps({"type": "assistant", "message": {"id": "m0", "model": "claude-haiku-5-5",
+                  "usage": {"input_tokens": 5_000_000, "output_tokens": 0}}}) + "\n", encoding="utf-8")
+# the orchestrator chat that spawned agent-1: counted from the job's start
+from datetime import datetime, timezone  # noqa: E402
+(sub.parent.with_suffix(".jsonl")).write_text(
+    json.dumps({"type": "user", "message": {"content": "/factory run 15"}}) + "\n"
+    + json.dumps({"type": "assistant", "timestamp": "2020-01-01T00:00:00Z",
+                  "message": {"id": "o0", "model": "claude-haiku-5-5", "usage": {"input_tokens": 9_000_000}}}) + "\n"
+    + json.dumps({"type": "assistant", "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                  "message": {"id": "o1", "model": "claude-haiku-5-5", "usage": {"input_tokens": 2_000_000}}}) + "\n",
+    encoding="utf-8")
 r = sh([sys.executable, str(proj / "factory/bin/job"), "summary", jid], proj, env=env)  # no -X utf8
-check("cost found from a UTF-8 transcript, even without -X utf8 ($0.10)", "$0.10" in r.stdout, r.stdout + r.stderr)
+check("cost found from a UTF-8 transcript, even without -X utf8 ($0.10)", "agents $0.10" in r.stdout,
+      r.stdout + r.stderr)
+check("an earlier attempt's agent is left out, the orchestrator chat counted from the job's start ($0.20)",
+      "orchestrator chat $0.20" in r.stdout and "total $0.30" in r.stdout, r.stdout + r.stderr)
 
 # ---- 9. no merge: reviews pass, the approver recommends, the job waits for a person ----
 check("advance review", jmain(["advance", jid, "review"]) == 0)
 for reviewer in json.loads((jd / "job.json").read_text())["agents"]["reviewers"]:
     (jd / f"round-1/review-{reviewer}.md").write_text("VERDICT: PASS\n\n## Summary\n- fine\n")
+leftover = subprocess.Popen([sys.executable, "-m", "http.server", str(5100 + 10 * 1 + 1)], cwd=wt,
+                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+time.sleep(1.5)
 check("advance approve", jmain(["advance", jid, "approve"]) == 0)
+try:
+    leftover.wait(timeout=10)
+except subprocess.TimeoutExpired:
+    leftover.kill()
+check("leaving review stops a dev server the verifier left on the job's port", leftover.returncode is not None
+      and not sh([BASH, "-lc", f"factory/bin/port pid {5100 + 10 * 1 + 1}"], proj, env=env).stdout.strip())
 check("approve → merging is illegal", jmain(["advance", jid, "merging"]) != 0)
 (jd / "decision.md").write_text("APPROVE\n\n## Summary\n- old verdict\n")
 check("an APPROVE verdict is refused (READY or ESCALATE only)", jmain(["advance", jid, "needs-human"]) != 0)
@@ -242,6 +309,9 @@ check("the hand-over lists the screenshot by a path inside the repo, never this 
       "#### Screenshots" in pr_comments[0][-1] and "01_page.png" in pr_comments[0][-1]
       and str(BOX).replace("\\", "/") not in pr_comments[0][-1].replace("\\", "/"), pr_comments[0][-1])
 check("no gh pr merge was called", not any(c[:2] == ("pr", "merge") for c in gh_calls), gh_calls)
+later = job.screenshots_md({"id": jid, "round": 2})  # round 2's verifier took none
+check("the hand-over falls back to the latest round with screenshots, and says so",
+      "From round 1; the verifier took none in round 2." in later and "01_page.png" in later, later)
 r = sh([BASH, "-lc", f"factory/bin/job merge {jid}"], proj, env=env)
 check("`job merge` is refused as bad arguments", r.returncode != 0 and "bad arguments" in r.stderr,
       r.stdout + r.stderr)

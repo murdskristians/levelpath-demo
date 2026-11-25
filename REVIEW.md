@@ -26,6 +26,7 @@ Every finding is one or the other. One Important finding makes the verdict `CHAN
 - LLM output used without schema validation, or a missing timeout or fallback.
 - Tests: new behaviour without a test where a runner exists; an existing test weakened, skipped or rewritten to pass.
 - Data: a migration that loses data, or edits an applied migration.
+- A rule in `CLAUDE.md`'s Rules broken, such as a `catch` that neither logs nor rethrows ("never silently fail"), wherever it is: TypeScript or an inline script.
 
 **Nit** (worth saying, never blocking):
 

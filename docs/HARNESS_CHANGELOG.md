@@ -570,3 +570,34 @@ Format:
   - `CLAUDE.md` names the exception: in a factory or ADW run, the builder commits and pushes its own job branch and opens its draft PR.
   - Job 005 was discarded and issue #17 closed, so the run could be repeated from scratch.
 - **Why:** a step every run needs must be allowed by the repo's own settings, not by whichever session happens to run it. The two drivers must behave the same for the same role.
+
+## 2026-11-25: Twelve fixes from building one feature three ways
+
+- **What went wrong:** the light/dark toggle was built once by each driver (`docs/experiments/theme-toggle-baseline.md`). Comparing the runs showed twelve gaps, all in the harness rather than in the code the agents wrote.
+- **Before → after**, one per gap:
+  1. **Cost.** The board's L2 cost left out the orchestrator chat ($1.17 of a real $3.42) and added in the agents of a failed earlier attempt with the same job id. → `factory/bin/job` counts only agents that started after the job did, and records the chat that spawned them as `orchestrator_usd` (from the job's start to its end). `job summary` and the board show agents + chat.
+  2. **Screenshots.** The factory's PR comment used only the last round's, so PR #19 had none although round 1 took two. → The factory and the ADW fall back to the latest round with screenshots and say which.
+  3. **Verifier.** It skipped the browser in rounds 2 and 3 although round 3 changed `index.html`, so the final code was never seen in a browser. → `verifier.md`: from round 2, diff against the last reviewed round's commit; any change a user can see means a new browser check and fresh screenshots.
+  4. **Gate records.** A re-run overwrote the failed `checks.md`. → `factory/bin/gate` keeps an earlier run as `checks-<k>.md`/`.log` and names it in the new summary. The factory skill allows one re-run of a FAIL where no check ran, and says to tell the user.
+  5. **Assumptions.** L3's planner accepted a visible flash as an Assumption, and it never reached the human. → `approver.md`: every spec Assumption that changes what a user sees goes in "For the human", even on READY.
+  6. **Silent catches.** Three empty `catch` blocks (one in an inline script) passed the bugs review. → `reviewer-bugs.md` greps every `catch` in the diff, `.html` included; `REVIEW.md` makes a broken `CLAUDE.md` rule Important.
+  7. **Double test runs.** In fix rounds the builder ran the full `checks.sh` (about 8 minutes) and the gate then ran it again. → `builder.md`: round 1 and rounds after a failed gate run the full suite; rounds that answer reviews run lint, build and tests for the packages touched. The gate still runs everything.
+  8. **Shell writes.** Both builders wrote files through heredocs and `python3 -` scripts; the rule was only in `planner.md`. → `builder.md` has it too.
+  9. **Leaked servers.** Every verifier left an API dev server running (ports 5150, 9104, 5090). → The scripts stop the run's ports after the builder and after the reviewers: `job advance` (out of `build` or `review`), the ADW pipeline, and `/plan` and `/verify` for L1.
+  10. **L1's gate record.** It said `COMMIT: <main's HEAD>` while testing uncommitted work, so `/review` couldn't tell whether code changed since `/verify`. → `COMMIT` is the HEAD plus `+dirty:<hash of the changes>`; `gate --tree` prints it, and `/review` compares with it.
+  11. **Postgres down.** `/verify` with Docker stopped recorded a failed round 1. → The gate checks config.json `gate_services` first and exits 2 without recording anything; `/verify` and the factory skill say what to start.
+  12. **L1 cost.** The pair chat wrote the code itself on Opus: $6.53 of $7.41, from 8.2M tokens of growing context. → After plan approval, `/plan` spawns the `builder` agent on Sonnet in a "pair run" mode (uncommitted, no push, no PR); the chat steers and reviews.
+- **Tests:** `factory/tests/run_test.py` (52 checks, 9 new: tree id, service down, kept records, cost window and orchestrator, ports stopped after review, screenshot fallback); `test_hooks.py` 81.
+- **Why this prevents a repeat:** the reports now show what a run really cost and checked, and the jobs nobody was doing (stopping servers, keeping records, showing assumptions) are done by scripts or named in the role that owns them.
+
+## 2026-11-25: L1 ran different agents from L2 and L3
+
+- **What was missing:** Chris asked for the three drivers to run the same agents on the same input, so the only difference between two batches would be graphify. L1 didn't: its chat wrote `intake.md` by hand instead of running `intake`, it called the planner twice (spec, then plan), its reviewers were a fixed trio on their frontmatter models (Sonnet spec, plus security) instead of the routed set (Haiku spec for low risk), and it had no approver.
+- **Before:** the L1 commands imitated the pipeline; L2 and L3 ran it.
+- **After:**
+  - `factory/bin/route --intake <intake.md>` prints the routed agent set; L1 saves it as `agents/<slug>/agents.json`.
+  - `/spec` runs `intake`, routes, runs `scout` on high risk, and calls the planner with the factory's prompt (spec and plan in one call).
+  - `/plan` shows the planner's plan, re-planning only if Chris changed the spec, and builds with the routed builder model.
+  - `/verify` and `/review` use the routed models and reviewers; `/review` runs the `approver` when every review passes, and offers the factory's rule on CHANGES (the builder fixes every Important finding).
+  - `docs/experiments/theme-toggle-graphify-protocol.md` fixes what is held equal in the six runs.
+- **Why:** a comparison of drivers, or of a tool across drivers, means something only when the agents, prompts and models are the same and the driver alone differs.

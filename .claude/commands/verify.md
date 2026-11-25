@@ -16,14 +16,19 @@ slug: $1
 
 1. Make sure `agents/<slug>/spec.md` is the current spec: copy
    `docs/specs/<slug>.md` over it.
-2. Pick the round: one more than the highest `agents/<slug>/round-*` folder.
-   Create `agents/<slug>/round-<N>/`.
+2. Pick the round: one more than the highest `agents/<slug>/round-*` folder
+   that has a `checks.md`.
 3. Run the gate on the main checkout:
    `factory/bin/gate --run <repo> <repo>/agents/<slug>/round-<N>`.
-   It writes `checks.md` and `checks.log` there. If it prints `GATE: FAIL`,
-   show Chris the failing lines from `checks.log` and stop: fix first.
-4. Spawn the `verifier` agent with this prompt (ports 5090 and 5091 are
-   reserved for L1):
+   It creates the round folder and writes `checks.md` and `checks.log` there.
+   - Exit 2 with "a service the checks need is down": nothing was recorded.
+     Tell Chris what to start (for Postgres, Docker Desktop and then
+     `pnpm db:up`) and stop. Run `/verify` again once it's up.
+   - `GATE: FAIL`: show Chris the failing lines from `checks.log` and stop:
+     fix first.
+4. Spawn the `verifier` agent, with model `agents.json` `reviewers.verify`
+   when `agents/<slug>/agents.json` exists (from `/spec`), and this prompt
+   (ports 5090 and 5091 are reserved for L1):
 
    ```
    Job: <slug>. Job folder: <repo>/agents/<slug>/. Main checkout: <repo>. Worktree: <repo>. Branch: <current branch>. Base: origin/main. Issue: none.
@@ -35,6 +40,8 @@ slug: $1
    must write it now with the Write tool, from what it already ran, without
    starting the app again. If it is still missing, tell Chris. Never write it
    yourself, not even from the verifier's reply.
+6. Stop anything the verifier left running: `factory/bin/port stop 5090` and
+   `factory/bin/port stop 5091`.
 
 ## Report
 

@@ -45,6 +45,11 @@ lint or build; run a command only to prove a specific finding, never with
   are untouched.
 - **Red flags** (grep the diff): secrets, `TODO`/`FIXME`, commented-out code,
   `console.log` left in, `any` used to silence the compiler, `@ts-ignore`.
+- **Every `catch` in the diff** (grep for it, in `.ts`, `.tsx` and inline
+  scripts in `.html` alike): it logs (`console.warn`/`console.error` in the
+  web app, the logger in the API) and rethrows, or returns a typed error or a
+  documented fallback. An empty or comment-only `catch` breaks CLAUDE.md's
+  "never silently fail" and is Important.
 - **Conventions:** as `CLAUDE.md` and the neighbouring code show them.
 - **Docs and commits:** docs updated where the change needs it; short commit
   messages, nothing stray committed. Trailers and attribution are the

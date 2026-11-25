@@ -1,7 +1,9 @@
 #!/usr/bin/env -S python3 -X utf8
 """Map intake's risk and surfaces to the job's agent set.
 
-Usage: route <job-id>
+Usage:
+  route <job-id>              factory job: record the agent set in job.json and print it
+  route --intake <intake.md>  any driver (L1's /spec): print the agent set as JSON
 
 Reads `risk` and `surfaces` from intake.md (through job.json), looks them up in
 config.json's `routing` and `surface_reviewers` tables, and records the result
@@ -27,9 +29,40 @@ def die(msg):
     sys.exit(1)
 
 
+def agent_set(risk_name, surfaces):
+    risk = CONFIG["routing"].get(risk_name) or die(
+        f"risk {risk_name!r} isn't in config.json routing ({', '.join(CONFIG['routing'])})")
+    reviewers = dict(risk)
+    for surface in surfaces:
+        extra = CONFIG["surface_reviewers"].get(surface)
+        if extra is None:
+            die(f"surface {surface!r} isn't in config.json surface_reviewers ({', '.join(CONFIG['surface_reviewers'])})")
+        for reviewer, model in extra.items():
+            reviewers.setdefault(reviewer, model)  # the risk table's model wins
+    model = CONFIG.get("builder_models", {}).get(risk_name, "sonnet")
+    return {"reviewers": reviewers, "planner": model, "builder": model}
+
+
+def from_intake(path):
+    """The agent set for an intake.md's RISK and SURFACES header lines."""
+    fields = {}
+    for line in Path(path).read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            break
+        key, _, value = line.partition(":")
+        fields[key.strip().upper()] = value.strip()
+    if fields.get("DECISION") != "ACCEPT":
+        die(f"{path} says DECISION: {fields.get('DECISION')}, not ACCEPT")
+    surfaces = [s.strip() for s in fields.get("SURFACES", "").split(",") if s.strip() and s.strip() != "none"]
+    return agent_set(fields.get("RISK", ""), surfaces)
+
+
 def main(argv):
+    if len(argv) == 2 and argv[0] == "--intake":
+        print(json.dumps(from_intake(argv[1]), indent=2))
+        return
     if len(argv) != 1:
-        die("usage: route <job-id>")
+        die("usage: route <job-id> | route --intake <intake.md>")
     job_id = argv[0]
     job_bin = str(FACTORY / "bin" / "job")
     # Through this interpreter: Windows can't execute the shebang script directly
@@ -39,17 +72,8 @@ def main(argv):
         die(res.stderr.strip())
     job = json.loads((FACTORY / "jobs" / job_id / "job.json").read_text())
     intake = job["intake"] or die(f"{job_id} has no intake.md")
-    risk = CONFIG["routing"].get(intake["risk"]) or die(
-        f"risk {intake['risk']!r} isn't in config.json routing ({', '.join(CONFIG['routing'])})")
-    reviewers = dict(risk)
-    for surface in intake["surfaces"]:
-        extra = CONFIG["surface_reviewers"].get(surface)
-        if extra is None:
-            die(f"surface {surface!r} isn't in config.json surface_reviewers ({', '.join(CONFIG['surface_reviewers'])})")
-        for reviewer, model in extra.items():
-            reviewers.setdefault(reviewer, model)  # the risk table's model wins
-    model = CONFIG.get("builder_models", {}).get(intake["risk"], "sonnet")
-    agents = {"reviewers": reviewers, "planner": model, "builder": model}
+    agents = agent_set(intake["risk"], intake["surfaces"])
+    reviewers, model = agents["reviewers"], agents["planner"]
     res = subprocess.run([*python, job_bin, "agents", job_id, json.dumps(agents)], capture_output=True, text=True)
     if res.returncode != 0:
         die(res.stderr.strip())
