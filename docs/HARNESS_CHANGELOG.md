@@ -601,3 +601,9 @@ Format:
   - `/verify` and `/review` use the routed models and reviewers; `/review` runs the `approver` when every review passes, and offers the factory's rule on CHANGES (the builder fixes every Important finding).
   - `docs/experiments/theme-toggle-graphify-protocol.md` fixes what is held equal in the six runs.
 - **Why:** a comparison of drivers, or of a tool across drivers, means something only when the agents, prompts and models are the same and the driver alone differs.
+
+## 2026-11-25: builder skipped the manual browser check (adw-c58bb65a)
+
+- **Before:** the builder left acceptance criterion 10 (the manual check in a real browser) unchecked "for budget", and the copied spec failed Prettier on the first lint run.
+- **After:** round 2 ran the app and checked the dark list, decision queue, empty state, reload and user switch; the spec copy was formatted.
+- **Why:** a criterion that needs a browser is not done by jsdom tests alone; the spec review caught it as Important.
