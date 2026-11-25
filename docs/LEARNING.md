@@ -207,6 +207,12 @@ One entry per new concept: what it is, why it matters, where it lives in this re
 - **Why it matters:** Anyone can type "ignore your instructions" into a form. Escaping keeps the text from changing the prompt's structure, and the checks after the call (schema, supplier filter) limit what an injection that still works can do: at worst a wrong suggestion the user sees and edits, never another company's supplier.
 - **Where:** [prompt.ts](../apps/api/src/suggestions/prompt.ts), `withOwnSupplier` in [suggestions.service.ts](../apps/api/src/suggestions/suggestions.service.ts); the injection cases in [evals/cases.json](../evals/cases.json).
 
+## Theming with custom properties and a pre-paint script
+
+- **What:** Every color in `App.css` is a CSS custom property declared on `:root` (light) and overridden under `:root[data-theme='dark']`. The theme (stored choice, else the OS `prefers-color-scheme`, else light) is set as `data-theme` on `<html>` by a small inline script in `index.html`, and again by React when the toggle is pressed.
+- **Why it matters:** A client-rendered app paints before React runs, so setting the theme only in React flashes the wrong one. The inline script runs while the page is still being parsed. The toggle state lives in `App`, above the keyed `Dashboard`, so switching users does not reset it. Nothing is stored until the button is pressed, so the OS keeps deciding until the user chooses.
+- **Where:** [App.css](../apps/web/src/App.css), [index.html](../apps/web/index.html), [theme.ts](../apps/web/src/theme.ts), [ThemeToggle.tsx](../apps/web/src/components/ThemeToggle.tsx).
+
 ## Logs without personal data (Phase 4)
 
 - **What:** Each suggestion writes one JSON line: provider, model, latency, attempts, validation failures, outcome, reason, error class, and the description's length and the first 12 hex characters of its SHA-256. Never the description, the model's output, `err.message`, a key or a name.
