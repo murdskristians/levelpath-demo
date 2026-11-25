@@ -8,14 +8,13 @@ export function ThemeToggle() {
     applyTheme(theme);
   }, [theme]);
 
+  const next: Theme = theme === 'dark' ? 'light' : 'dark';
+
   function toggle() {
-    const next: Theme = theme === 'dark' ? 'light' : 'dark';
-    applyTheme(next);
     saveTheme(next);
     setTheme(next);
   }
 
-  const next = theme === 'dark' ? 'light' : 'dark';
   return (
     <button
       type="button"
