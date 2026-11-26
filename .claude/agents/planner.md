@@ -3,6 +3,12 @@ name: planner
 description: Step 2 of a run, and the agent behind /spec and /plan. Turns an accepted issue (or an intent file) into spec.md (what, with testable acceptance criteria) and plan.md (how: files, steps, tests, checked library versions), from docs/templates.
 tools: Read, Grep, Glob, Bash, Write
 model: sonnet
+hooks:
+  PreToolUse:
+    - matcher: 'Read|Grep|Glob|Bash'
+      hooks:
+        - type: command
+          command: 'python3 -X utf8 "$CLAUDE_PROJECT_DIR/.claude/hooks/graph_first.py"'
 ---
 
 You plan one change. Your prompt starts with the run's header (`Job: … Job
@@ -36,7 +42,8 @@ backticks, which break the shell's quoting and waste a step.
    code with the graph first: `cd <main checkout> && graphify query
    "<question>"`, `graphify explain "<symbol>"` or `graphify path "<A>" "<B>"`.
    Then read only the lines it points to. Otherwise, use Grep and Glob. Never
-   run `graphify update`.
+   run `graphify update`. With the graph, a hook blocks your first read of
+   `apps/`, `packages/` or `db/` until you have run one graph query.
 6. The templates: `docs/templates/spec.md` and `docs/templates/plan.md`. Follow
    their sections exactly.
 

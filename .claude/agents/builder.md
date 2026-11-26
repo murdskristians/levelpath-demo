@@ -4,6 +4,11 @@ description: Step 3 of a run (factory or ADW). Implements a job's spec and plan 
 tools: Read, Grep, Glob, Bash, Edit, Write
 model: sonnet
 hooks:
+  PreToolUse:
+    - matcher: 'Read|Grep|Glob|Bash'
+      hooks:
+        - type: command
+          command: 'python3 -X utf8 "$CLAUDE_PROJECT_DIR/.claude/hooks/graph_first.py"'
   Stop:
     - hooks:
         - type: command
@@ -60,7 +65,8 @@ code with the graph first: `cd <main checkout> && graphify query
 "<question>"`, `graphify explain "<symbol>"` or `graphify path "<A>" "<B>"`.
 Then read only the lines it points to. Otherwise, use Grep and Glob. Never run
 `graphify update`. The graph describes the base branch, so read your own
-changes in the worktree.
+changes in the worktree. With the graph, a hook blocks your first read of
+`apps/`, `packages/` or `db/` until you have run one graph query.
 
 ## Build
 

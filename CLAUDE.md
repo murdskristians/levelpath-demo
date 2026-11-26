@@ -97,3 +97,4 @@ Rules:
 - When `<main checkout>/graphify-out/graph.json` exists, find code with it before your first Grep, search or source-file read: `cd <main checkout> && graphify query "<question>"`, `graphify explain "<symbol>"` for one concept, `graphify path "<A>" "<B>"` for how two connect, `graphify section "<heading>"` for one Markdown section. Then read only the lines it points to. Without the graph, use Grep and Glob.
 - Read `graphify-out/GRAPH_REPORT.md` only for a broad architecture review, when query, path and explain don't surface enough.
 - Never run `graphify update` in a run or a job worktree, and never commit `graphify-out/`.
+- The planner and the builder are held to it: their hook `.claude/hooks/graph_first.py` blocks their first read of `apps/`, `packages/` or `db/` until they have run one query.
