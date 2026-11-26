@@ -2,6 +2,7 @@ import {
   createPurchaseRequestSchema,
   MAX_DESCRIPTION_LENGTH,
   type CreatePurchaseRequestInput,
+  type PurchaseRequest,
   type Suggestion,
   type SuggestionResponse,
   type Supplier,
@@ -33,24 +34,28 @@ const FIELD_OF_PATH: Record<string, Field> = {
 };
 
 export function NewRequestForm({
+  initial,
   suppliers,
   onCreate,
   onSuggest,
   onCancel,
 }: {
+  /** A draft to edit: the form starts with its values. */
+  initial?: PurchaseRequest;
   suppliers: Supplier[];
+  /** Called with the valid input; for an edit, the caller saves it. */
   onCreate: (input: CreatePurchaseRequestInput) => Promise<void>;
   onSuggest: (description: string) => Promise<SuggestionResponse>;
   onCancel: () => void;
 }) {
   const titleRef = useRef<HTMLInputElement>(null);
   useEffect(() => titleRef.current?.focus(), []);
-  const [description, setDescription] = useState('');
-  const [title, setTitle] = useState('');
-  const [category, setCategory] = useState('');
-  const [amount, setAmount] = useState('');
-  const [currency, setCurrency] = useState('EUR');
-  const [supplierId, setSupplierId] = useState('');
+  const [description, setDescription] = useState(initial?.description ?? '');
+  const [title, setTitle] = useState(initial?.title ?? '');
+  const [category, setCategory] = useState<string>(initial?.category ?? '');
+  const [amount, setAmount] = useState(initial ? centsToAmountText(initial.amountCents) : '');
+  const [currency, setCurrency] = useState(initial?.currency ?? 'EUR');
+  const [supplierId, setSupplierId] = useState(initial?.supplier.id ?? '');
   const [errors, setErrors] = useState<Errors>({});
   const [suggesting, setSuggesting] = useState(false);
   const [suggested, setSuggested] = useState<ReadonlySet<SuggestedField>>(new Set());
@@ -157,7 +162,12 @@ export function NewRequestForm({
     ) : null;
 
   return (
-    <form onSubmit={handleSubmit} noValidate className="request-form" aria-label="New request">
+    <form
+      onSubmit={handleSubmit}
+      noValidate
+      className="request-form"
+      aria-label={initial ? 'Edit request' : 'New request'}
+    >
       <div className="form-field">
         <label htmlFor="description">Description</label>
         <textarea
@@ -265,7 +275,7 @@ export function NewRequestForm({
         {message('supplier')}
       </div>
       <div className="form-actions">
-        <button type="submit">Create request</button>
+        <button type="submit">{initial ? 'Save changes' : 'Create request'}</button>
         <button type="button" className="secondary" onClick={onCancel}>
           Cancel
         </button>
