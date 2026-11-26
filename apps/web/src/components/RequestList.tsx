@@ -16,9 +16,11 @@ export function StatusBadge({ status }: { status: keyof typeof STATUS_LABEL }) {
 export function RequestList({
   requests,
   onSubmit,
+  onEdit,
 }: {
   requests: PurchaseRequest[];
   onSubmit: (id: string) => void;
+  onEdit: (id: string) => void;
 }) {
   if (requests.length === 0) {
     return (
@@ -48,9 +50,14 @@ export function RequestList({
             </p>
           )}
           {r.status === 'draft' && (
-            <button type="button" aria-label={`Submit ${r.title}`} onClick={() => onSubmit(r.id)}>
-              Submit
-            </button>
+            <>
+              <button type="button" aria-label={`Edit ${r.title}`} onClick={() => onEdit(r.id)}>
+                Edit
+              </button>
+              <button type="button" aria-label={`Submit ${r.title}`} onClick={() => onSubmit(r.id)}>
+                Submit
+              </button>
+            </>
           )}
         </li>
       ))}
