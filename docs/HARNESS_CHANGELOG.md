@@ -621,3 +621,10 @@ Format:
 - **Before:** the planner's sketches weren't held to CLAUDE.md's Rules; the spec reviewer traced manual criteria like any other; the builder copied the docs and could change files after `checks.sh`.
 - **After:** `planner.md`: code in the plan follows the Rules, every `catch` logs. `reviewer-spec.md`: browser and manual criteria are marked `verifier`, never a finding. `builder.md`: format the spec and plan copies with Prettier, and run `checks.sh` last.
 - **Why this prevents a repeat:** each slip is stopped where it starts (the plan, the reviewer's scope, the builder's order of steps) instead of costing a review round later.
+
+## 2026-11-26: a role instruction didn't make agents use the graph either
+
+- **What went wrong:** the first "with" batch of the graphify A/B test (`edit-draft-request`) had the "Finding code" step in the planner and builder roles. One L1 planner ran a single `graphify query`, and the L2 and L3 agents ran none. The intent made the code easy to find, and the builders followed the plan's file list, so the instruction lost to habit. The batch was invalid and archived (`agents/_archive/ab1-edit-draft-request/`). I had told Chris the instruction would be enough, without checking that on a real agent first.
+- **Before:** graph use was a sentence in the role.
+- **After:** `.claude/hooks/graph_first.py`, a PreToolUse hook in the planner's and builder's frontmatter. When the main checkout has the graph, it blocks the agent's first read or search of `apps/`, `packages/` or `db/` until it has run one `graphify query`, `explain` or `path`, and the block message tells it the command. It does nothing without a graph, and it logs every block and query. It is covered by 16 cases in `test_hooks.py`, and was checked on the real planner, headless (L3) and as a subagent (L1/L2), before any run.
+- **Why this prevents a repeat:** a hook is enforced where an instruction is only advice. More generally: check a behaviour change on one real agent before asking for a batch of runs.

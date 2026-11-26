@@ -188,5 +188,43 @@ try:
 finally:
     tmp.unlink(missing_ok=True)
 
+# ---- graph_first.py, in a throwaway main checkout --------------------------------------
+GF = HERE / "graph_first.py"
+gbox = Path(tempfile.mkdtemp(prefix="graph-first-"))
+G = gbox.as_posix()
+
+
+def gf(tool, agent="planner", **inp):
+    code, err = hook(GF, {"tool_name": tool, "tool_input": inp, "cwd": G, "session_id": "s1", "agent_type": agent}, gbox)
+    return "block" if code == 2 else "allow" if code == 0 else f"error {code}: {err[:200]}"
+
+
+check("graph_first: without a graph, reading code is allowed (the 'without' side)",
+      gf("Read", file_path=f"{G}/apps/api/src/x.ts") == "allow")
+(gbox / "graphify-out").mkdir()
+(gbox / "graphify-out/graph.json").write_text("{}")
+for name, tool, inp in [("Read apps/…", "Read", {"file_path": f"{G}/apps/api/src/x.ts"}),
+                        ("Read a worktree's packages/…", "Read", {"file_path": f"{G}/trees/ab/packages/shared/x.ts"}),
+                        ("Grep with no path", "Grep", {"pattern": "submit"}),
+                        ("Glob **/*.tsx", "Glob", {"pattern": "**/*.tsx"}),
+                        ("bash cat apps/…", "Bash", {"command": "cd x && cat apps/web/src/App.tsx"}),
+                        ("bash ls packages/shared/src", "Bash", {"command": "ls packages/shared/src"})]:
+    check(f"graph_first: blocks before a query: {name}", gf(tool, **inp) == "block", gf(tool, **inp))
+for name, tool, inp in [("Read the job's spec", "Read", {"file_path": f"{G}/agents/j/spec.md"}),
+                        ("Read a template", "Read", {"file_path": f"{G}/docs/templates/plan.md"}),
+                        ("Glob the job folder", "Glob", {"pattern": "agents/j/*"}),
+                        ("bash pnpm install", "Bash", {"command": "pnpm install --frozen-lockfile"}),
+                        ("bash git diff", "Bash", {"command": "git diff origin/main...HEAD"})]:
+    check(f"graph_first: always allows: {name}", gf(tool, **inp) == "allow", gf(tool, **inp))
+check("graph_first: a graphify query is allowed",
+      gf("Bash", command=f'cd {G} && graphify query "submit route"') == "allow")
+check("graph_first: after the query, reading code is allowed",
+      gf("Read", file_path=f"{G}/apps/api/src/x.ts") == "allow")
+check("graph_first: the builder in the same session (L1, L2) still has to query",
+      gf("Read", agent="builder", file_path=f"{G}/apps/api/src/x.ts") == "block")
+log = (gbox / "graphify-out/graph-first.log.jsonl").read_text(encoding="utf-8")
+check("graph_first: logs blocks and queries", '"blocked"' in log and '"query"' in log)
+shutil.rmtree(gbox, ignore_errors=True)
+
 print(f"\n{ok} passed, {fail} failed")
 sys.exit(1 if fail else 0)
