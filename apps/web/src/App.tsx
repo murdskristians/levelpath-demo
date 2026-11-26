@@ -19,6 +19,7 @@ function Dashboard({ userId, picker }: { userId: string; picker: ReactNode }) {
   const [toDecide, setToDecide] = useState<PurchaseRequest[] | null>(null);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [formOpen, setFormOpen] = useState(false);
+  const [editing, setEditing] = useState<PurchaseRequest | null>(null);
   const [error, setError] = useState<unknown>(null);
 
   // Drops responses that arrive after this user's dashboard is gone.
@@ -80,6 +81,20 @@ function Dashboard({ userId, picker }: { userId: string; picker: ReactNode }) {
     }
   };
 
+  const update = async (input: Parameters<typeof api.updateRequest>[1]) => {
+    if (!editing) return;
+    setError(null);
+    if (
+      await run(
+        () => api.updateRequest(editing.id, input),
+        () => undefined,
+      )
+    ) {
+      setEditing(null);
+      await loadMine();
+    }
+  };
+
   return (
     <>
       <header>
@@ -95,17 +110,31 @@ function Dashboard({ userId, picker }: { userId: string; picker: ReactNode }) {
         <ErrorAlert error={error} />
         <section aria-labelledby="purchase-requests-heading">
           <h2 id="purchase-requests-heading">Purchase requests</h2>
-          {formOpen && (
+          {(formOpen || editing) && (
             <NewRequestForm
+              key={editing?.id ?? 'new'}
               suppliers={suppliers}
-              onCreate={create}
+              request={editing ?? undefined}
+              onSave={editing ? update : create}
               // Not through `run`: a failed suggestion is the form's note, never the ErrorAlert.
               onSuggest={(description) => api.suggest(description)}
-              onCancel={() => setFormOpen(false)}
+              onCancel={() => {
+                setFormOpen(false);
+                setEditing(null);
+              }}
             />
           )}
-          {mine && <RequestList requests={mine} onSubmit={(id) => void submit(id)} />}
-          {!formOpen && (
+          {mine && (
+            <RequestList
+              requests={mine}
+              onSubmit={(id) => void submit(id)}
+              onEdit={(id) => {
+                setFormOpen(false);
+                setEditing(mine.find((r) => r.id === id) ?? null);
+              }}
+            />
+          )}
+          {!formOpen && !editing && (
             <button type="button" onClick={() => setFormOpen(true)}>
               New request
             </button>

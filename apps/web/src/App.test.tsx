@@ -595,6 +595,126 @@ describe('App', () => {
     });
   });
 
+  describe('edit a draft', () => {
+    const SUBMITTED = purchaseRequest({ id: ID(2), title: 'Chairs', status: 'submitted' });
+    const PATCH = `PATCH /purchase-requests/${ID(1)}`;
+
+    function setup(extra: Record<string, unknown> = {}) {
+      let title = 'Laptops';
+      const m = mockFetch(
+        base(ALICE, {
+          'GET /purchase-requests/mine': () => [purchaseRequest({ title }), SUBMITTED],
+          [PATCH]: (c: { body: unknown }) => {
+            title = (c.body as { title: string }).title;
+            return purchaseRequest({ title });
+          },
+          'POST /purchase-requests/suggestion': {
+            suggestion: {
+              title: 'Suggested title',
+              category: 'hardware',
+              quantity: null,
+              amountCents: null,
+              currency: null,
+              supplierId: null,
+            },
+          },
+          ...extra,
+        }),
+      );
+      renderAs(ALICE);
+      return m;
+    }
+    const patches = (m: ReturnType<typeof setup>) => m.calls.filter((c) => c.method === 'PATCH');
+    const field = (label: string) => (screen.getByLabelText(label) as HTMLInputElement).value;
+
+    it('offers Edit next to Submit on drafts only', async () => {
+      setup();
+      const edit = await screen.findByRole('button', { name: 'Edit Laptops' });
+      expect(edit.textContent).toBe('Edit');
+      expect(edit.nextElementSibling).toBe(screen.getByRole('button', { name: 'Submit Laptops' }));
+      expect(screen.queryByRole('button', { name: 'Edit Chairs' })).toBeNull();
+    });
+
+    it('opens the form pre-filled', async () => {
+      setup();
+      fireEvent.click(await screen.findByRole('button', { name: 'Edit Laptops' }));
+
+      expect(screen.getByRole('form', { name: 'Edit request' })).toBeTruthy();
+      expect(field('Title')).toBe('Laptops');
+      expect(field('Amount')).toBe('1250.00');
+      expect(field('Currency')).toBe('EUR');
+      expect(field('Category')).toBe('other');
+      expect(field('Supplier')).toBe(supplier().id);
+      expect(field('Description')).toBe('');
+      expect(screen.getByRole('button', { name: 'Save changes' })).toBeTruthy();
+      expect(screen.queryByRole('button', { name: 'New request' })).toBeNull();
+    });
+
+    it('saves with one PATCH, closes the form and shows the new title', async () => {
+      const m = setup();
+      fireEvent.click(await screen.findByRole('button', { name: 'Edit Laptops' }));
+      fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Better laptops' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+
+      await screen.findByText('Better laptops');
+      expect(screen.queryByLabelText('Title')).toBeNull();
+      expect(patches(m)).toHaveLength(1);
+      expect(patches(m)[0].url).toBe(`/api/purchase-requests/${ID(1)}`);
+      expect(patches(m)[0].body).toEqual({
+        title: 'Better laptops',
+        amountCents: 125000,
+        currency: 'EUR',
+        supplierId: supplier().id,
+        category: 'other',
+        description: '',
+      });
+      expect(m.count('GET', '/purchase-requests/mine')).toBe(2);
+      expect(screen.getByText('Draft')).toBeTruthy();
+    });
+
+    it('closes on Cancel and sends no PATCH', async () => {
+      const m = setup();
+      fireEvent.click(await screen.findByRole('button', { name: 'Edit Laptops' }));
+      fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Changed' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
+      expect(screen.queryByLabelText('Title')).toBeNull();
+      expect(patches(m)).toHaveLength(0);
+      expect(screen.getByText('Laptops')).toBeTruthy();
+    });
+
+    it('shows the field error and sends nothing for an empty title', async () => {
+      const m = setup();
+      fireEvent.click(await screen.findByRole('button', { name: 'Edit Laptops' }));
+      fireEvent.change(screen.getByLabelText('Title'), { target: { value: '' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+
+      expect(document.getElementById('title-error')).not.toBeNull();
+      expect(patches(m)).toHaveLength(0);
+    });
+
+    it('shows the alert for a failed PATCH and keeps the list', async () => {
+      setup({ [PATCH]: fail(409, { statusCode: 409, message: 'only a draft can be edited' }) });
+      fireEvent.click(await screen.findByRole('button', { name: 'Edit Laptops' }));
+      fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Other' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+
+      expect((await screen.findByRole('alert')).textContent).toContain('only a draft');
+      expect(screen.getByText('Laptops')).toBeTruthy();
+    });
+
+    it('fills fields with Suggest fields in the edit form', async () => {
+      const m = setup();
+      fireEvent.click(await screen.findByRole('button', { name: 'Edit Laptops' }));
+      fireEvent.change(screen.getByLabelText('Description'), { target: { value: 'need laptops' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Suggest fields' }));
+
+      await waitFor(() => expect(field('Title')).toBe('Suggested title'));
+      expect(field('Category')).toBe('hardware');
+      expect(m.count('POST', '/purchase-requests/suggestion')).toBe(1);
+    });
+  });
+
   describe('errors', () => {
     it('shows the API message in an alert and keeps the lists', async () => {
       mockFetch(

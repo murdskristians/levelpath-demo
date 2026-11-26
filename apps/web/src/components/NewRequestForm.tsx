@@ -2,6 +2,7 @@ import {
   createPurchaseRequestSchema,
   MAX_DESCRIPTION_LENGTH,
   type CreatePurchaseRequestInput,
+  type PurchaseRequest,
   type Suggestion,
   type SuggestionResponse,
   type Supplier,
@@ -34,23 +35,26 @@ const FIELD_OF_PATH: Record<string, Field> = {
 
 export function NewRequestForm({
   suppliers,
-  onCreate,
+  request,
+  onSave,
   onSuggest,
   onCancel,
 }: {
   suppliers: Supplier[];
-  onCreate: (input: CreatePurchaseRequestInput) => Promise<void>;
+  /** The draft being edited; without it the form creates a new request. */
+  request?: PurchaseRequest;
+  onSave: (input: CreatePurchaseRequestInput) => Promise<void>;
   onSuggest: (description: string) => Promise<SuggestionResponse>;
   onCancel: () => void;
 }) {
   const titleRef = useRef<HTMLInputElement>(null);
   useEffect(() => titleRef.current?.focus(), []);
-  const [description, setDescription] = useState('');
-  const [title, setTitle] = useState('');
-  const [category, setCategory] = useState('');
-  const [amount, setAmount] = useState('');
-  const [currency, setCurrency] = useState('EUR');
-  const [supplierId, setSupplierId] = useState('');
+  const [description, setDescription] = useState(request?.description ?? '');
+  const [title, setTitle] = useState(request?.title ?? '');
+  const [category, setCategory] = useState<string>(request?.category ?? '');
+  const [amount, setAmount] = useState(request ? centsToAmountText(request.amountCents) : '');
+  const [currency, setCurrency] = useState(request?.currency ?? 'EUR');
+  const [supplierId, setSupplierId] = useState(request?.supplier.id ?? '');
   const [errors, setErrors] = useState<Errors>({});
   const [suggesting, setSuggesting] = useState(false);
   const [suggested, setSuggested] = useState<ReadonlySet<SuggestedField>>(new Set());
@@ -125,7 +129,7 @@ export function NewRequestForm({
     }
     setErrors(found);
     if (!result.success || Object.keys(found).length > 0) return;
-    await onCreate(result.data);
+    await onSave(result.data);
   }
 
   function aria(name: Field) {
@@ -157,7 +161,12 @@ export function NewRequestForm({
     ) : null;
 
   return (
-    <form onSubmit={handleSubmit} noValidate className="request-form" aria-label="New request">
+    <form
+      onSubmit={handleSubmit}
+      noValidate
+      className="request-form"
+      aria-label={request ? 'Edit request' : 'New request'}
+    >
       <div className="form-field">
         <label htmlFor="description">Description</label>
         <textarea
@@ -265,7 +274,7 @@ export function NewRequestForm({
         {message('supplier')}
       </div>
       <div className="form-actions">
-        <button type="submit">Create request</button>
+        <button type="submit">{request ? 'Save changes' : 'Create request'}</button>
         <button type="button" className="secondary" onClick={onCancel}>
           Cancel
         </button>
