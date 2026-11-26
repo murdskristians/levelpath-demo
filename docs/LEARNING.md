@@ -219,3 +219,9 @@ One entry per new concept: what it is, why it matters, where it lives in this re
 - **Why it matters:** most of an agent's cost is reading. On the theme toggle, a Sonnet builder read 0.5M to 1.4M tokens; if the graph points it at the right lines first, it should read less. Whether it does is what the experiment measures.
 - **Where:** the graphify section of [CLAUDE.md](../CLAUDE.md), the "Finding code" step in the planner and builder roles (`.claude/agents/`), `.claude/skills/graphify/`, and `graphify-out/` in the main checkout only (git-ignored, rebuilt by Chris after a merge). Agents query it there with `cd <main checkout> && graphify query …`, so a job worktree never needs its own copy. The measurements are in [docs/experiments/](experiments/).
 - **Lesson from run 3:** installing it is not using it. With only CLAUDE.md rules and advisory hooks, no agent queried the graph once; each role's own steps won. A tool reaches agents through their role file.
+
+## One form, two modes (editing a draft)
+
+- **What:** editing a draft reuses the create form: `NewRequestForm` takes an optional `initial` request, pre-fills from it and saves through `onSave`. `PUT /purchase-requests/:id` takes the same strict body as create.
+- **Why it matters:** one form means Suggest fields and validation come for free. The route answers 404 for what the caller may not edit (someone else's draft, another tenant, a bad id) and 409 for a non-draft of their own, so an edit reveals nothing about requests the caller can't see.
+- **Where:** [NewRequestForm.tsx](../apps/web/src/components/NewRequestForm.tsx), `update` in [purchase-requests.service.ts](../apps/api/src/purchase-requests/purchase-requests.service.ts), [update.spec.ts](../apps/api/src/purchase-requests/update.spec.ts).

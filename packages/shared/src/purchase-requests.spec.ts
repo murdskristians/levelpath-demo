@@ -9,6 +9,7 @@ import {
   suggestionRequestSchema,
   suggestionResponseSchema,
   suggestionSchema,
+  updatePurchaseRequestSchema,
 } from './purchase-requests.js';
 
 const SUPPLIER = 'a0000000-0000-4000-8000-000000000201';
@@ -72,6 +73,41 @@ describe('createPurchaseRequestSchema', () => {
     ['a description over 2000 characters', { description: 'x'.repeat(MAX_DESCRIPTION_LENGTH + 1) }],
   ])('rejects %s', (_what, change) => {
     expect(createPurchaseRequestSchema.safeParse({ ...valid, ...change }).success).toBe(false);
+  });
+});
+
+describe('updatePurchaseRequestSchema', () => {
+  it('accepts a valid body and defaults the currency and the description', () => {
+    expect(
+      updatePurchaseRequestSchema.parse({
+        title: ' Laptops ',
+        amountCents: 5,
+        supplierId: SUPPLIER,
+        category: 'hardware',
+      }),
+    ).toEqual({
+      title: 'Laptops',
+      amountCents: 5,
+      currency: 'EUR',
+      supplierId: SUPPLIER,
+      category: 'hardware',
+      description: '',
+    });
+  });
+
+  it.each([
+    ['an id', { id: 'a0000000-0000-4000-8000-000000000999' }],
+    ['a tenantId', { tenantId: 'b0000000-0000-4000-8000-000000000001' }],
+    ['a status', { status: 'approved' }],
+    ['a requesterId', { requesterId: 'a0000000-0000-4000-8000-000000000101' }],
+    ['an empty title', { title: '  ' }],
+    ['a negative amount', { amountCents: -1 }],
+    ['an amount over the cap', { amountCents: MAX_AMOUNT_CENTS + 1 }],
+    ['a lowercase currency', { currency: 'eur' }],
+    ['a category outside the list', { category: 'furniture' }],
+    ['a supplier id that is no UUID', { supplierId: 'nope' }],
+  ])('rejects %s', (_what, change) => {
+    expect(updatePurchaseRequestSchema.safeParse({ ...valid, ...change }).success).toBe(false);
   });
 });
 

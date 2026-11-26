@@ -47,6 +47,11 @@ export type CreatePurchaseRequestInput = z.input<typeof createPurchaseRequestSch
 /** What the API works with after parsing (currency filled in). */
 export type CreatePurchaseRequest = z.output<typeof createPurchaseRequestSchema>;
 
+/** PUT /purchase-requests/:id: the same fields and rules as create, strict for the same reason. */
+export const updatePurchaseRequestSchema = createPurchaseRequestSchema;
+export type UpdatePurchaseRequestInput = z.input<typeof updatePurchaseRequestSchema>;
+export type UpdatePurchaseRequest = z.output<typeof updatePurchaseRequestSchema>;
+
 /** POST /purchase-requests/:id/decision. A rejection needs a comment saying why. */
 export const decisionSchema = z
   .strictObject({

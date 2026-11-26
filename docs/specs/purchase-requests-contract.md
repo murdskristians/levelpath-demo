@@ -8,21 +8,23 @@
 
 Every route needs `X-User-Id` (the global `AuthGuard`). The tenant and the caller come from `@CurrentUser()`, never from the body, query or path.
 
-| Route                                  | Who           | Body                    | Success                                                                         | Errors                                                                      |
-| -------------------------------------- | ------------- | ----------------------- | ------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
-| `GET /suppliers`                       | anyone        | -                       | `200 Supplier[]`, the caller's company, by name                                 | 401                                                                         |
-| `GET /purchase-requests/mine`          | anyone        | -                       | `200 PurchaseRequest[]` the caller created, newest first                        | 401                                                                         |
-| `GET /purchase-requests/to-decide`     | approver      | -                       | `200 PurchaseRequest[]`: submitted, of the caller's company, oldest first       | 401, 403 for a requester                                                    |
-| `POST /purchase-requests`              | anyone        | `CreatePurchaseRequest` | `201 PurchaseRequest`, status `draft`, requester is the caller                  | 400 invalid body, 404 unknown supplier                                      |
-| `POST /purchase-requests/:id/submit`   | its requester | -                       | `200 PurchaseRequest`, status `submitted`                                       | 404 not the caller's or not found, 409 not a draft                          |
-| `POST /purchase-requests/:id/decision` | approver      | `Decision`              | `200 PurchaseRequest`, status `approved` or `rejected`, with `decision`         | 400, 403 a requester or the request's own requester, 404, 409 not submitted |
-| `POST /purchase-requests/suggestion`   | anyone        | `SuggestionRequest`     | `200 SuggestionResponse`; `suggestion: null` on any LLM problem; writes nothing | 400 invalid body, 401                                                       |
+| Route                                  | Who           | Body                    | Success                                                                         | Errors                                                                                 |
+| -------------------------------------- | ------------- | ----------------------- | ------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| `GET /suppliers`                       | anyone        | -                       | `200 Supplier[]`, the caller's company, by name                                 | 401                                                                                    |
+| `GET /purchase-requests/mine`          | anyone        | -                       | `200 PurchaseRequest[]` the caller created, newest first                        | 401                                                                                    |
+| `GET /purchase-requests/to-decide`     | approver      | -                       | `200 PurchaseRequest[]`: submitted, of the caller's company, oldest first       | 401, 403 for a requester                                                               |
+| `POST /purchase-requests`              | anyone        | `CreatePurchaseRequest` | `201 PurchaseRequest`, status `draft`, requester is the caller                  | 400 invalid body, 404 unknown supplier                                                 |
+| `PUT /purchase-requests/:id`           | its requester | `UpdatePurchaseRequest` | `200 PurchaseRequest`, still `draft`, new values                                | 400 invalid body, 404 not the caller's, not found or unknown supplier, 409 not a draft |
+| `POST /purchase-requests/:id/submit`   | its requester | -                       | `200 PurchaseRequest`, status `submitted`                                       | 404 not the caller's or not found, 409 not a draft                                     |
+| `POST /purchase-requests/:id/decision` | approver      | `Decision`              | `200 PurchaseRequest`, status `approved` or `rejected`, with `decision`         | 400, 403 a requester or the request's own requester, 404, 409 not submitted            |
+| `POST /purchase-requests/suggestion`   | anyone        | `SuggestionRequest`     | `200 SuggestionResponse`; `suggestion: null` on any LLM problem; writes nothing | 400 invalid body, 401                                                                  |
 
 - **404, never 403, for something the caller may not see:** another tenant's id, or another requester's draft, behaves like an id that doesn't exist.
 - **403 is only for what reveals nothing:**
   - a requester calling an approver-only route: the role is checked before any lookup, so the answer is the same for every id;
   - an approver deciding their own request, which they can see anyway.
 - `:id` must be a UUID: anything else is a 404.
+- **`PUT /purchase-requests/:id`:** a non-draft is a 409 even for its own requester; only the six fields and `updatedAt` change.
 - **`POST /purchase-requests/suggestion`** (Phase 4, [spec](purchase-request-suggestion.md)) never answers 5xx for an LLM problem: an invalid answer after one repair, the 15 s deadline, a refusal, `max_tokens` or a provider error all give `200 {"suggestion": null}`. The suppliers the model may pick from are the caller's own, read through `withTenant`; a `supplierId` outside them becomes `null`.
 - **Errors** have the shape `{ "statusCode": n, "message": "…" }`. A 400 adds `"issues": [{ "path": "…", "message": "…" }]` from Zod.
 
@@ -45,6 +47,8 @@ CreatePurchaseRequest = {          // strict: unknown keys (an id, a tenantId) a
   category: one of PURCHASE_REQUEST_CATEGORIES,     // Phase 4, required
   description: string (trimmed, 0..2000, default ""), // Phase 4
 }
+
+UpdatePurchaseRequest = CreatePurchaseRequest   // same fields and rules, strict
 
 Decision = {                       // strict
   decision: 'approved' | 'rejected',
