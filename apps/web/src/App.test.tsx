@@ -491,6 +491,128 @@ describe('App', () => {
     );
   });
 
+  describe('edit a draft', () => {
+    const NORDIC = supplier({ id: ID(901), name: 'Nordic Laptops' });
+    const draft = purchaseRequest({
+      supplier: supplier(),
+      category: 'hardware',
+      description: 'For sales',
+    });
+    const fill = (label: string, value: string) =>
+      fireEvent.change(screen.getByLabelText(label), { target: { value } });
+    const value = (label: string) =>
+      (screen.getByLabelText(label) as HTMLInputElement | HTMLSelectElement).value;
+
+    async function openEdit(extra: Record<string, unknown> = {}) {
+      let current = draft;
+      const m = mockFetch(
+        base(ALICE, {
+          'GET /suppliers': [supplier(), NORDIC],
+          'GET /purchase-requests/mine': () => [current],
+          [`PUT /purchase-requests/${draft.id}`]: (call: { body: unknown }) => {
+            const { title } = call.body as { title: string };
+            current = purchaseRequest({ ...draft, title, supplier: NORDIC });
+            return current;
+          },
+          ...extra,
+        }),
+      );
+      renderAs(ALICE);
+      await screen.findByText('Laptops');
+      fireEvent.click(screen.getByRole('button', { name: 'Edit Laptops' }));
+      await screen.findByRole('form', { name: 'Edit request' });
+      return m;
+    }
+    const puts = (m: Awaited<ReturnType<typeof openEdit>>) =>
+      m.calls.filter((c) => c.method === 'PUT');
+
+    it('shows Edit next to Submit on a draft only', async () => {
+      mockFetch(
+        base(ALICE, {
+          'GET /purchase-requests/mine': [
+            draft,
+            purchaseRequest({ id: ID(2), title: 'Chairs', status: 'submitted' }),
+            purchaseRequest({ id: ID(3), title: 'Desks', status: 'approved' }),
+          ],
+        }),
+      );
+      renderAs(ALICE);
+      await screen.findByText('Laptops');
+      const edit = screen.getByRole('button', { name: 'Edit Laptops' });
+      expect(edit.textContent).toBe('Edit');
+      expect(edit.nextElementSibling).toBe(screen.getByRole('button', { name: 'Submit Laptops' }));
+      expect(screen.getAllByRole('button', { name: /^Edit / })).toHaveLength(1);
+    });
+
+    it('opens the form pre-filled, then Save sends one PUT, closes and re-fetches', async () => {
+      const m = await openEdit();
+      expect(value('Title')).toBe('Laptops');
+      expect(value('Amount')).toBe('1250.00');
+      expect(value('Currency')).toBe('EUR');
+      expect(value('Supplier')).toBe(draft.supplier.id);
+      expect(value('Category')).toBe('hardware');
+      expect(value('Description')).toBe('For sales');
+
+      fill('Title', 'Better laptops');
+      fill('Supplier', NORDIC.id);
+      fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+
+      await screen.findByText('Better laptops');
+      expect(screen.queryByRole('form')).toBeNull();
+      expect(puts(m)).toHaveLength(1);
+      expect(puts(m)[0].url).toBe(`/api/purchase-requests/${draft.id}`);
+      expect(puts(m)[0].body).toEqual({
+        title: 'Better laptops',
+        amountCents: 125000,
+        currency: 'EUR',
+        supplierId: NORDIC.id,
+        category: 'hardware',
+        description: 'For sales',
+      });
+      expect(m.count('GET', '/purchase-requests/mine')).toBe(2);
+      expect(screen.getByText('Draft')).toBeTruthy();
+    });
+
+    it('Cancel closes the form and sends nothing', async () => {
+      const m = await openEdit();
+      fill('Title', 'Changed');
+      fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+      expect(screen.queryByRole('form')).toBeNull();
+      expect(screen.getByText('Laptops')).toBeTruthy();
+      expect(m.calls.filter((c) => c.method !== 'GET')).toHaveLength(0);
+      expect(m.count('GET', '/purchase-requests/mine')).toBe(1);
+    });
+
+    it('shows the title error and sends nothing for an empty title', async () => {
+      const m = await openEdit();
+      fill('Title', '');
+      fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+      expect(screen.getByLabelText('Title').getAttribute('aria-invalid')).toBe('true');
+      expect(puts(m)).toHaveLength(0);
+    });
+
+    it('Suggest fields works in the edit form', async () => {
+      const m = await openEdit({
+        'POST /purchase-requests/suggestion': {
+          suggestion: {
+            title: 'Suggested laptops',
+            category: 'hardware',
+            quantity: 2,
+            amountCents: 240000,
+            currency: 'EUR',
+            supplierId: NORDIC.id,
+          },
+        },
+      });
+      fireEvent.click(screen.getByRole('button', { name: 'Suggest fields' }));
+      await waitFor(() => expect(value('Title')).toBe('Suggested laptops'));
+      expect(m.count('POST', '/purchase-requests/suggestion')).toBe(1);
+      expect(value('Amount')).toBe('2400.00');
+      expect(value('Supplier')).toBe(NORDIC.id);
+      expect(document.querySelectorAll('.suggested-tag').length).toBe(5);
+    });
+  });
+
   describe('approver queue', () => {
     const waiting = purchaseRequest({ id: ID(5), title: 'Monitors', status: 'submitted' });
 

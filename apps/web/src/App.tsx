@@ -18,7 +18,8 @@ function Dashboard({ userId, picker }: { userId: string; picker: ReactNode }) {
   const [mine, setMine] = useState<PurchaseRequest[] | null>(null);
   const [toDecide, setToDecide] = useState<PurchaseRequest[] | null>(null);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
-  const [formOpen, setFormOpen] = useState(false);
+  // Closed, a new request, or the draft being edited.
+  const [form, setForm] = useState<null | 'new' | PurchaseRequest>(null);
   const [error, setError] = useState<unknown>(null);
 
   // Drops responses that arrive after this user's dashboard is gone.
@@ -67,15 +68,16 @@ function Dashboard({ userId, picker }: { userId: string; picker: ReactNode }) {
       () => api.decide(id, input),
       () => Promise.all([loadToDecide(), loadMine()]),
     );
-  const create = async (input: Parameters<typeof api.createRequest>[0]) => {
+  const save = async (input: Parameters<typeof api.createRequest>[0]) => {
     setError(null);
+    const editing = form !== null && form !== 'new' ? form : null;
     if (
       await run(
-        () => api.createRequest(input),
+        () => (editing ? api.updateRequest(editing.id, input) : api.createRequest(input)),
         () => undefined,
       )
     ) {
-      setFormOpen(false);
+      setForm(null);
       await loadMine();
     }
   };
@@ -95,18 +97,26 @@ function Dashboard({ userId, picker }: { userId: string; picker: ReactNode }) {
         <ErrorAlert error={error} />
         <section aria-labelledby="purchase-requests-heading">
           <h2 id="purchase-requests-heading">Purchase requests</h2>
-          {formOpen && (
+          {form !== null && (
             <NewRequestForm
+              key={form === 'new' ? 'new' : form.id}
               suppliers={suppliers}
-              onCreate={create}
+              draft={form === 'new' ? undefined : form}
+              onSave={save}
               // Not through `run`: a failed suggestion is the form's note, never the ErrorAlert.
               onSuggest={(description) => api.suggest(description)}
-              onCancel={() => setFormOpen(false)}
+              onCancel={() => setForm(null)}
             />
           )}
-          {mine && <RequestList requests={mine} onSubmit={(id) => void submit(id)} />}
-          {!formOpen && (
-            <button type="button" onClick={() => setFormOpen(true)}>
+          {mine && (
+            <RequestList
+              requests={mine}
+              onSubmit={(id) => void submit(id)}
+              onEdit={(request) => setForm(request)}
+            />
+          )}
+          {form === null && (
+            <button type="button" onClick={() => setForm('new')}>
               New request
             </button>
           )}
