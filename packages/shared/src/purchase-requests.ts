@@ -47,6 +47,15 @@ export type CreatePurchaseRequestInput = z.input<typeof createPurchaseRequestSch
 /** What the API works with after parsing (currency filled in). */
 export type CreatePurchaseRequest = z.output<typeof createPurchaseRequestSchema>;
 
+/**
+ * PUT /purchase-requests/:id. The create schema itself: the same six fields, rules and
+ * defaults, so an edit can't accept what a create refuses. Every field is replaced, so a
+ * left-out currency or description takes its default, as on create.
+ */
+export const updatePurchaseRequestSchema = createPurchaseRequestSchema;
+export type UpdatePurchaseRequestInput = z.input<typeof updatePurchaseRequestSchema>;
+export type UpdatePurchaseRequest = z.output<typeof updatePurchaseRequestSchema>;
+
 /** POST /purchase-requests/:id/decision. A rejection needs a comment saying why. */
 export const decisionSchema = z
   .strictObject({

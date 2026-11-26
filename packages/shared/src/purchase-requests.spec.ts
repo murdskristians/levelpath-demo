@@ -9,6 +9,7 @@ import {
   suggestionRequestSchema,
   suggestionResponseSchema,
   suggestionSchema,
+  updatePurchaseRequestSchema,
 } from './purchase-requests.js';
 
 const SUPPLIER = 'a0000000-0000-4000-8000-000000000201';
@@ -72,6 +73,12 @@ describe('createPurchaseRequestSchema', () => {
     ['a description over 2000 characters', { description: 'x'.repeat(MAX_DESCRIPTION_LENGTH + 1) }],
   ])('rejects %s', (_what, change) => {
     expect(createPurchaseRequestSchema.safeParse({ ...valid, ...change }).success).toBe(false);
+  });
+});
+
+describe('updatePurchaseRequestSchema', () => {
+  it('is the create schema, so an edit validates exactly as a create does', () => {
+    expect(updatePurchaseRequestSchema).toBe(createPurchaseRequestSchema);
   });
 });
 
