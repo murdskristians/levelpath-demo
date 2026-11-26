@@ -1,10 +1,12 @@
-import { Body, Controller, Get, HttpCode, Param, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Param, Post, Put, UseGuards } from '@nestjs/common';
 import {
   type CreatePurchaseRequest,
   createPurchaseRequestSchema,
   type Decision,
   decisionSchema,
   type PurchaseRequest,
+  type UpdatePurchaseRequest,
+  updatePurchaseRequestSchema,
 } from '@levelpath/shared';
 import { ApproverGuard } from '../auth/approver.guard.js';
 import type { AuthUser } from '../auth/auth-user.js';
@@ -16,6 +18,8 @@ import { PurchaseRequestsService } from './purchase-requests.service.js';
 // the guards (AuthGuard, then ApproverGuard) before the body pipe, so a requester on
 // an approver-only route gets 403 whatever they send. `:id` has no ParseUUIDPipe: that
 // answers 400, and the contract says a non-UUID id is a 404 (the service checks it).
+// `PUT :id` is the only PUT, so it shadows nothing: `GET mine` and `POST suggestion`
+// use other verbs.
 @Controller('purchase-requests')
 export class PurchaseRequestsController {
   constructor(private readonly purchaseRequests: PurchaseRequestsService) {}
@@ -43,6 +47,15 @@ export class PurchaseRequestsController {
   @HttpCode(200)
   submit(@CurrentUser() user: AuthUser, @Param('id') id: string): Promise<PurchaseRequest> {
     return this.purchaseRequests.submit(user, id);
+  }
+
+  @Put(':id')
+  update(
+    @CurrentUser() user: AuthUser,
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(updatePurchaseRequestSchema)) body: UpdatePurchaseRequest,
+  ): Promise<PurchaseRequest> {
+    return this.purchaseRequests.update(user, id, body);
   }
 
   @Post(':id/decision')

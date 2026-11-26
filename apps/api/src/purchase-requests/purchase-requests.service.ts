@@ -4,7 +4,12 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import type { CreatePurchaseRequest, Decision, PurchaseRequest } from '@levelpath/shared';
+import type {
+  CreatePurchaseRequest,
+  Decision,
+  PurchaseRequest,
+  UpdatePurchaseRequest,
+} from '@levelpath/shared';
 import { sql } from 'kysely';
 import type { AuthUser } from '../auth/auth-user.js';
 import { DatabaseService, type TenantTransaction } from '../db/database.service.js';
@@ -94,6 +99,48 @@ export class PurchaseRequestsService {
         .returning('id')
         .executeTakeFirst();
       if (!updated) throw new ConflictException('only a draft can be submitted');
+      return readBack(trx, id);
+    });
+  }
+
+  /** The caller's own draft gets new field values; it stays a draft. */
+  update(user: AuthUser, id: string, input: UpdatePurchaseRequest): Promise<PurchaseRequest> {
+    if (!isUuid(id)) throw new NotFoundException();
+    return this.db.withTenant(user.tenantId, async (trx) => {
+      const request = await trx
+        .selectFrom('purchase_requests')
+        .select(['id', 'status'])
+        .where('id', '=', id)
+        .where('requester_id', '=', user.userId)
+        .executeTakeFirst();
+      if (!request) throw new NotFoundException();
+      if (request.status !== 'draft') throw new ConflictException('only a draft can be edited');
+      let updated: { id: string } | undefined;
+      try {
+        // Conditional on the owner and the status, so an edit racing a submit changes nothing.
+        // Never tenant_id, requester_id, status, id or created_at.
+        updated = await trx
+          .updateTable('purchase_requests')
+          .set({
+            supplier_id: input.supplierId,
+            title: input.title,
+            amount_cents: input.amountCents,
+            currency: input.currency,
+            category: input.category,
+            description: input.description,
+            updated_at: sql<Date>`now()`,
+          })
+          .where('id', '=', id)
+          .where('requester_id', '=', user.userId)
+          .where('status', '=', 'draft')
+          .returning('id')
+          .executeTakeFirst();
+      } catch (err) {
+        // The composite foreign key to suppliers: unknown, or another company's.
+        if (isKeyViolation(err)) throw new NotFoundException();
+        throw err;
+      }
+      if (!updated) throw new ConflictException('only a draft can be edited');
       return readBack(trx, id);
     });
   }
