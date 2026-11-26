@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, Param, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Param, Post, Put, UseGuards } from '@nestjs/common';
 import {
   type CreatePurchaseRequest,
   createPurchaseRequestSchema,
@@ -43,6 +43,15 @@ export class PurchaseRequestsController {
   @HttpCode(200)
   submit(@CurrentUser() user: AuthUser, @Param('id') id: string): Promise<PurchaseRequest> {
     return this.purchaseRequests.submit(user, id);
+  }
+
+  @Put(':id')
+  update(
+    @CurrentUser() user: AuthUser,
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(createPurchaseRequestSchema)) body: CreatePurchaseRequest,
+  ): Promise<PurchaseRequest> {
+    return this.purchaseRequests.update(user, id, body);
   }
 
   @Post(':id/decision')

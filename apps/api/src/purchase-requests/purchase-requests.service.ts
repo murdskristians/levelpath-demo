@@ -98,6 +98,47 @@ export class PurchaseRequestsService {
     });
   }
 
+  /** The caller's own draft gets new values for all six fields; it stays a draft. */
+  update(user: AuthUser, id: string, input: CreatePurchaseRequest): Promise<PurchaseRequest> {
+    if (!isUuid(id)) throw new NotFoundException();
+    return this.db.withTenant(user.tenantId, async (trx) => {
+      const request = await trx
+        .selectFrom('purchase_requests')
+        .select(['id', 'status'])
+        .where('id', '=', id)
+        .where('requester_id', '=', user.userId)
+        .executeTakeFirst();
+      if (!request) throw new NotFoundException();
+      if (request.status !== 'draft') throw new ConflictException('only a draft can be edited');
+      let updated: { id: string } | undefined;
+      try {
+        // Conditional on the status, so a concurrent submit can't be overwritten.
+        updated = await trx
+          .updateTable('purchase_requests')
+          .set({
+            supplier_id: input.supplierId,
+            title: input.title,
+            amount_cents: input.amountCents,
+            currency: input.currency,
+            category: input.category,
+            description: input.description,
+            updated_at: sql<Date>`now()`,
+          })
+          .where('id', '=', id)
+          .where('requester_id', '=', user.userId)
+          .where('status', '=', 'draft')
+          .returning('id')
+          .executeTakeFirst();
+      } catch (err) {
+        // The composite foreign key to suppliers: unknown, or another company's.
+        if (isKeyViolation(err)) throw new NotFoundException();
+        throw err;
+      }
+      if (!updated) throw new ConflictException('only a draft can be edited');
+      return readBack(trx, id);
+    });
+  }
+
   /** An approver approves or rejects a submitted request someone else created. */
   decide(user: AuthUser, id: string, input: Decision): Promise<PurchaseRequest> {
     // ApproverGuard already checked this; repeated so the rule holds wherever this is called.
