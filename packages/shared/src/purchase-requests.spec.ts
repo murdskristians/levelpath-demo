@@ -9,6 +9,7 @@ import {
   suggestionRequestSchema,
   suggestionResponseSchema,
   suggestionSchema,
+  updatePurchaseRequestSchema,
 } from './purchase-requests.js';
 
 const SUPPLIER = 'a0000000-0000-4000-8000-000000000201';
@@ -206,6 +207,23 @@ describe('suggestionSchema', () => {
     ['an extra field', { ...suggestion, tenantId: SUPPLIER }],
   ])('rejects %s', (_what, output) => {
     expect(suggestionSchema.safeParse(output).success).toBe(false);
+  });
+});
+
+describe('updatePurchaseRequestSchema', () => {
+  const body = { title: 'T', amountCents: 5, supplierId: SUPPLIER, category: 'other' };
+
+  it('is the create schema: defaults filled, nothing stripped', () => {
+    expect(updatePurchaseRequestSchema).toBe(createPurchaseRequestSchema);
+    expect(updatePurchaseRequestSchema.parse(body)).toEqual({
+      ...body,
+      currency: 'EUR',
+      description: '',
+    });
+  });
+
+  it.each(['status', 'tenantId', 'id', 'requesterId'])('rejects an extra %s', (key) => {
+    expect(updatePurchaseRequestSchema.safeParse({ ...body, [key]: 'x' }).success).toBe(false);
   });
 });
 

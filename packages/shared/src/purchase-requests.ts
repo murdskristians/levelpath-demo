@@ -47,6 +47,11 @@ export type CreatePurchaseRequestInput = z.input<typeof createPurchaseRequestSch
 /** What the API works with after parsing (currency filled in). */
 export type CreatePurchaseRequest = z.output<typeof createPurchaseRequestSchema>;
 
+/** PUT /purchase-requests/:id replaces every field of a draft: the body is the create body. */
+export const updatePurchaseRequestSchema = createPurchaseRequestSchema;
+export type UpdatePurchaseRequestInput = CreatePurchaseRequestInput;
+export type UpdatePurchaseRequest = CreatePurchaseRequest;
+
 /** POST /purchase-requests/:id/decision. A rejection needs a comment saying why. */
 export const decisionSchema = z
   .strictObject({
