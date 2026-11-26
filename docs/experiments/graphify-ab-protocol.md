@@ -15,6 +15,8 @@ The graphify CLI, its hooks, its CLAUDE.md section and its skill stay installed 
 
 **Graph use is enforced (since 2026-11-26).** The first "with" batch was invalid, because the role instruction alone wasn't enough: only one agent of the three drivers queried the graph. Now a hook in the planner's and builder's frontmatter, `.claude/hooks/graph_first.py`, blocks their first read or search of `apps/`, `packages/` or `db/` until they have run one `graphify query`, `explain` or `path`. Without a graph, the hook does nothing, so the prompts and hooks are still identical on both sides. Every block and query is logged to `graphify-out/graph-first.log.jsonl`.
 
+**Risk is pinned to medium (since 2026-11-26, after batch 3).** Intake rated the same task high in the second "with" batch (L1 and L2 got Opus and a scout) and medium in the "without" batch (Sonnet, no scout), so only L3 compared like with like. `factory/config.json` now has `"pin_risk": "medium"`: the factory, the ADWs and L1's `/spec` route by it instead of intake's `RISK` (intake.md still records what intake said). The "without" batch already ran at medium in all three drivers, so only the "with" batch is rerun. The pin is removed after the test.
+
 ## Held equal
 
 | What    | How                                                                                                                                                                                                                                                                                                                        |

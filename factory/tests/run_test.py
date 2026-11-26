@@ -64,6 +64,7 @@ for rel in ["factory/bin/job", "factory/bin/gate", "factory/bin/route", "factory
 # The sandbox has no Postgres: its checks.sh needs no services. Section 5b tests the service check.
 config = json.loads((proj / "factory/config.json").read_text(encoding="utf-8"))
 config.pop("gate_services", None)
+config.pop("pin_risk", None)  # the tests check routing by intake's risk, not an experiment's pin
 (proj / "factory/config.json").write_text(json.dumps(config, indent=2), encoding="utf-8", newline="\n")
 (proj / "factory/checks.sh").write_text(
     '#!/usr/bin/env bash\nset -euo pipefail\n'
@@ -154,7 +155,7 @@ check("route runs and records reviewers (risk picks the models)",
       r.stdout + r.stderr)
 r = sh([BASH, "-lc", f"factory/bin/route --intake 'factory/jobs/{jid}/intake.md'"], proj, env=env)
 check("route --intake prints the same agent set for L1",
-      r.returncode == 0 and json.loads(r.stdout) == {"reviewers": {"verify": "sonnet", "bugs": "sonnet", "spec": "haiku"},
+      r.returncode == 0 and json.loads(r.stdout) == {"risk": "low", "reviewers":{"verify": "sonnet", "bugs": "sonnet", "spec": "haiku"},
                                                     "planner": "sonnet", "builder": "sonnet"}, r.stdout + r.stderr)
 agents = json.loads((jd / "job.json").read_text())["agents"]
 check("route records planner and builder models", agents.get("planner") == "sonnet" and agents.get("builder") == "sonnet",

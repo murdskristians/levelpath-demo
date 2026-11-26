@@ -628,3 +628,10 @@ Format:
 - **Before:** graph use was a sentence in the role.
 - **After:** `.claude/hooks/graph_first.py`, a PreToolUse hook in the planner's and builder's frontmatter. When the main checkout has the graph, it blocks the agent's first read or search of `apps/`, `packages/` or `db/` until it has run one `graphify query`, `explain` or `path`, and the block message tells it the command. It does nothing without a graph, and it logs every block and query. It is covered by 16 cases in `test_hooks.py`, and was checked on the real planner, headless (L3) and as a subagent (L1/L2), before any run.
 - **Why this prevents a repeat:** a hook is enforced where an instruction is only advice. More generally: check a behaviour change on one real agent before asking for a batch of runs.
+
+## 2026-11-26: intake's risk varied, so the A/B pairs ran on different models
+
+- **What went wrong:** in the graphify A/B test, intake rated the same intent high risk in the second "with" batch (L1 and L2) and medium in the "without" batch. High risk routes the planner and builder to Opus and adds a scout, so L1 and L2 used about 5× the tokens for a reason that had nothing to do with the graph. Only L3 was a fair pair. Also seen: L3's approver answered READY but didn't write `decision.md`, so the ADW recorded ESCALATE.
+- **Before:** routing followed intake's `RISK` every time, and the protocol held "models routed from intake's risk" equal, which they weren't.
+- **After:** `factory/config.json` can set `pin_risk`. `factory/bin/job` (sync), `factory/bin/route --intake` (L1, which now prints the risk it routed by) and `adws/adw_modules/pipeline.py` use it instead of intake's `RISK`, and `/spec` starts the scout from `agents.json` `risk`. The test pins it to `medium` for the rerun of the "with" batch. `factory/tests/run_test.py` keeps testing routing by intake's risk. The approver slip is left for after the test, so the harness stays the same between the batches.
+- **Why this prevents a repeat:** an experiment that compares runs has to hold the models fixed, not only the prompts. A judgement made fresh by an LLM in every run (risk) is a variable, so the test now fixes it.
