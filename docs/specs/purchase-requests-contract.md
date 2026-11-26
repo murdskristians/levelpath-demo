@@ -14,6 +14,7 @@ Every route needs `X-User-Id` (the global `AuthGuard`). The tenant and the calle
 | `GET /purchase-requests/mine`          | anyone        | -                       | `200 PurchaseRequest[]` the caller created, newest first                        | 401                                                                         |
 | `GET /purchase-requests/to-decide`     | approver      | -                       | `200 PurchaseRequest[]`: submitted, of the caller's company, oldest first       | 401, 403 for a requester                                                    |
 | `POST /purchase-requests`              | anyone        | `CreatePurchaseRequest` | `201 PurchaseRequest`, status `draft`, requester is the caller                  | 400 invalid body, 404 unknown supplier                                      |
+| `PUT /purchase-requests/:id`           | its requester | `UpdatePurchaseRequest` | `200 PurchaseRequest`, still `draft`, new values, new `updatedAt`               | 400, 404 not the caller's, not found or unknown supplier, 409 not a draft   |
 | `POST /purchase-requests/:id/submit`   | its requester | -                       | `200 PurchaseRequest`, status `submitted`                                       | 404 not the caller's or not found, 409 not a draft                          |
 | `POST /purchase-requests/:id/decision` | approver      | `Decision`              | `200 PurchaseRequest`, status `approved` or `rejected`, with `decision`         | 400, 403 a requester or the request's own requester, 404, 409 not submitted |
 | `POST /purchase-requests/suggestion`   | anyone        | `SuggestionRequest`     | `200 SuggestionResponse`; `suggestion: null` on any LLM problem; writes nothing | 400 invalid body, 401                                                       |
@@ -45,6 +46,8 @@ CreatePurchaseRequest = {          // strict: unknown keys (an id, a tenantId) a
   category: one of PURCHASE_REQUEST_CATEGORIES,     // Phase 4, required
   description: string (trimmed, 0..2000, default ""), // Phase 4
 }
+
+UpdatePurchaseRequest = CreatePurchaseRequest   // PUT /purchase-requests/:id, same fields and rules
 
 Decision = {                       // strict
   decision: 'approved' | 'rejected',

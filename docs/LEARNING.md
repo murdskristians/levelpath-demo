@@ -213,6 +213,12 @@ One entry per new concept: what it is, why it matters, where it lives in this re
 - **Why it matters:** A purchase description can hold names, prices or anything a user pastes. The hash still lets you see that the same text failed three times, and the length and latency explain most problems, without the log becoming a second copy of user data.
 - **Where:** the `llm_suggestion` line at the end of `suggest` in [suggestions.service.ts](../apps/api/src/suggestions/suggestions.service.ts); the log tests in [suggestions.service.spec.ts](../apps/api/src/suggestions/suggestions.service.spec.ts).
 
+## Editing a draft: one form, two modes
+
+- **What:** `PUT /purchase-requests/:id` takes the same strict body as create. The web app reuses the one request form: with a `draft` it starts pre-filled and says Save changes.
+- **Why it matters:** Ownership and `status = 'draft'` sit in the UPDATE's `WHERE`, so a concurrent submit can't be overwritten, and the 404 (not yours) versus 409 (not a draft) split is the same as for submit. Nothing else can change: the SET list never names the tenant or the requester.
+- **Where:** `update` in [purchase-requests.service.ts](../apps/api/src/purchase-requests/purchase-requests.service.ts), [update.spec.ts](../apps/api/src/purchase-requests/update.spec.ts), [NewRequestForm.tsx](../apps/web/src/components/NewRequestForm.tsx).
+
 ## A code graph for agents: graphify (experiment)
 
 - **What:** [graphify](https://github.com/Graphify-Labs/graphify) parses the repo into a graph of files, symbols and the links between them (`graphify update .`, no LLM). Agents ask it with `graphify query "<question>"`, `explain` and `path` instead of grepping and reading whole files. Hooks in `.claude/settings.json` remind every agent before a Grep, Read, Glob or Bash call; they never block one.
