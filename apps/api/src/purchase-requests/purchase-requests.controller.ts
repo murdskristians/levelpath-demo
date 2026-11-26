@@ -1,10 +1,12 @@
-import { Body, Controller, Get, HttpCode, Param, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Param, Patch, Post, UseGuards } from '@nestjs/common';
 import {
   type CreatePurchaseRequest,
   createPurchaseRequestSchema,
   type Decision,
   decisionSchema,
   type PurchaseRequest,
+  type UpdatePurchaseRequest,
+  updatePurchaseRequestSchema,
 } from '@levelpath/shared';
 import { ApproverGuard } from '../auth/approver.guard.js';
 import type { AuthUser } from '../auth/auth-user.js';
@@ -37,6 +39,15 @@ export class PurchaseRequestsController {
     @Body(new ZodValidationPipe(createPurchaseRequestSchema)) body: CreatePurchaseRequest,
   ): Promise<PurchaseRequest> {
     return this.purchaseRequests.create(user, body);
+  }
+
+  @Patch(':id')
+  update(
+    @CurrentUser() user: AuthUser,
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(updatePurchaseRequestSchema)) body: UpdatePurchaseRequest,
+  ): Promise<PurchaseRequest> {
+    return this.purchaseRequests.update(user, id, body);
   }
 
   @Post(':id/submit')

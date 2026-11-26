@@ -9,6 +9,7 @@ import {
   suggestionRequestSchema,
   suggestionResponseSchema,
   suggestionSchema,
+  updatePurchaseRequestSchema,
 } from './purchase-requests.js';
 
 const SUPPLIER = 'a0000000-0000-4000-8000-000000000201';
@@ -73,6 +74,26 @@ describe('createPurchaseRequestSchema', () => {
   ])('rejects %s', (_what, change) => {
     expect(createPurchaseRequestSchema.safeParse({ ...valid, ...change }).success).toBe(false);
   });
+});
+
+describe('updatePurchaseRequestSchema', () => {
+  it('behaves as create: defaults the currency and description', () => {
+    expect(
+      updatePurchaseRequestSchema.parse({
+        title: 'Laptops',
+        amountCents: 5,
+        supplierId: SUPPLIER,
+        category: 'hardware',
+      }),
+    ).toMatchObject({ currency: 'EUR', description: '' });
+  });
+
+  it.each([{ status: 'approved' }, { id: SUPPLIER }, { tenantId: SUPPLIER }])(
+    'rejects the extra key %o',
+    (extra) => {
+      expect(updatePurchaseRequestSchema.safeParse({ ...valid, ...extra }).success).toBe(false);
+    },
+  );
 });
 
 describe('decisionSchema', () => {
