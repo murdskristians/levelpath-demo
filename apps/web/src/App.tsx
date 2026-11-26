@@ -19,6 +19,7 @@ function Dashboard({ userId, picker }: { userId: string; picker: ReactNode }) {
   const [toDecide, setToDecide] = useState<PurchaseRequest[] | null>(null);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [formOpen, setFormOpen] = useState(false);
+  const [editing, setEditing] = useState<PurchaseRequest | null>(null);
   const [error, setError] = useState<unknown>(null);
 
   // Drops responses that arrive after this user's dashboard is gone.
@@ -67,15 +68,16 @@ function Dashboard({ userId, picker }: { userId: string; picker: ReactNode }) {
       () => api.decide(id, input),
       () => Promise.all([loadToDecide(), loadMine()]),
     );
-  const create = async (input: Parameters<typeof api.createRequest>[0]) => {
+  const save = async (input: Parameters<typeof api.createRequest>[0]) => {
     setError(null);
     if (
       await run(
-        () => api.createRequest(input),
+        () => (editing ? api.updateRequest(editing.id, input) : api.createRequest(input)),
         () => undefined,
       )
     ) {
       setFormOpen(false);
+      setEditing(null);
       await loadMine();
     }
   };
@@ -97,16 +99,38 @@ function Dashboard({ userId, picker }: { userId: string; picker: ReactNode }) {
           <h2 id="purchase-requests-heading">Purchase requests</h2>
           {formOpen && (
             <NewRequestForm
+              // The key gives each draft (and a new request) its own fresh form state.
+              key={editing?.id ?? 'new'}
               suppliers={suppliers}
-              onCreate={create}
+              initial={editing ?? undefined}
+              onSave={save}
               // Not through `run`: a failed suggestion is the form's note, never the ErrorAlert.
               onSuggest={(description) => api.suggest(description)}
-              onCancel={() => setFormOpen(false)}
+              onCancel={() => {
+                setFormOpen(false);
+                setEditing(null);
+              }}
             />
           )}
-          {mine && <RequestList requests={mine} onSubmit={(id) => void submit(id)} />}
+          {mine && (
+            <RequestList
+              requests={mine}
+              onSubmit={(id) => void submit(id)}
+              onEdit={(r) => {
+                setError(null);
+                setEditing(r);
+                setFormOpen(true);
+              }}
+            />
+          )}
           {!formOpen && (
-            <button type="button" onClick={() => setFormOpen(true)}>
+            <button
+              type="button"
+              onClick={() => {
+                setEditing(null);
+                setFormOpen(true);
+              }}
+            >
               New request
             </button>
           )}

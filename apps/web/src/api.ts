@@ -29,7 +29,7 @@ export class ApiRequestError extends Error {
 /** Every call goes to /api/… with X-User-Id; every response is parsed before use. */
 export function createApi(userId: string) {
   async function call<T>(
-    method: 'GET' | 'POST',
+    method: 'GET' | 'POST' | 'PATCH',
     path: string,
     schema: z.ZodType<T>,
     body?: unknown,
@@ -76,6 +76,8 @@ export function createApi(userId: string) {
     getToDecide: () => call('GET', '/purchase-requests/to-decide', requests),
     createRequest: (input: CreatePurchaseRequestInput) =>
       call('POST', '/purchase-requests', purchaseRequestSchema, input),
+    updateRequest: (id: string, input: CreatePurchaseRequestInput) =>
+      call('PATCH', `/purchase-requests/${id}`, purchaseRequestSchema, input),
     submit: (id: string) => call('POST', `/purchase-requests/${id}/submit`, purchaseRequestSchema),
     decide: (id: string, input: DecisionInput) =>
       call('POST', `/purchase-requests/${id}/decision`, purchaseRequestSchema, input),
