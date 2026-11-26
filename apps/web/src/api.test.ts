@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ApiRequestError, createApi } from './api';
-import { fail, mockFetch, purchaseRequest } from './test/fixtures';
+import { fail, ID, mockFetch, purchaseRequest } from './test/fixtures';
 
 const ALICE = 'a0000000-0000-4000-8000-000000000101';
 
@@ -66,6 +66,26 @@ describe('createApi', () => {
       url: '/api/purchase-requests/suggestion',
       body: { description: 'need pens' },
     });
+  });
+
+  it('sends PUT for updateRequest and parses the answer', async () => {
+    const m = mockFetch({ [`PUT /purchase-requests/${ID(1)}`]: purchaseRequest() });
+    const input = {
+      title: 'Laptops',
+      amountCents: 125000,
+      currency: 'EUR',
+      supplierId: ID(900),
+      category: 'other' as const,
+      description: '',
+    };
+    expect(await createApi(ALICE).updateRequest(ID(1), input)).toEqual(purchaseRequest());
+    expect(m.calls).toHaveLength(1);
+    expect(m.calls[0]).toMatchObject({
+      method: 'PUT',
+      url: `/api/purchase-requests/${ID(1)}`,
+      body: input,
+    });
+    expect(m.calls[0].headers['X-User-Id']).toBe(ALICE);
   });
 
   it('rejects a suggestion answer with extra keys: the schema is strict', async () => {

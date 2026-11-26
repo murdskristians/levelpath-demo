@@ -333,6 +333,171 @@ describe('App', () => {
     });
   });
 
+  describe('edit a draft', () => {
+    const draft = purchaseRequest({ description: 'For the new hires' });
+    const PUT_ROUTE = `PUT /purchase-requests/${ID(1)}`;
+    const PUT_URL = `/api/purchase-requests/${ID(1)}`;
+
+    async function openEdit(extra: Record<string, unknown> = {}) {
+      let current = draft;
+      const m = mockFetch(
+        base(ALICE, {
+          'GET /purchase-requests/mine': () => [current],
+          [PUT_ROUTE]: () => (current = purchaseRequest({ ...draft, title: 'Gaming laptops' })),
+          ...extra,
+        }),
+      );
+      renderAs(ALICE);
+      fireEvent.click(await screen.findByRole('button', { name: 'Edit Laptops' }));
+      return m;
+    }
+    const fill = (label: string, value: string) =>
+      fireEvent.change(screen.getByLabelText(label), { target: { value } });
+    const value = (label: string) => (screen.getByLabelText(label) as HTMLInputElement).value;
+    const puts = (m: Awaited<ReturnType<typeof openEdit>>) =>
+      m.calls.filter((c) => c.method === 'PUT');
+
+    it('shows Edit next to Submit on drafts only (criterion 14)', async () => {
+      const rejected = purchaseRequest({ id: ID(2), title: 'Chairs', status: 'rejected' });
+      mockFetch(base(ALICE, { 'GET /purchase-requests/mine': [draft, rejected] }));
+      renderAs(ALICE);
+
+      await screen.findByText('Laptops');
+      const items = screen.getAllByRole('listitem');
+      const edit = within(items[0]).getByRole('button', { name: 'Edit Laptops' });
+      expect(edit.textContent).toBe('Edit');
+      const submit = within(items[0]).getByRole('button', { name: 'Submit Laptops' });
+      expect(submit.parentElement).toBe(edit.parentElement);
+      expect(within(items[1]).queryByRole('button', { name: 'Edit Chairs' })).toBeNull();
+      expect(within(items[1]).queryByRole('button', { name: /^Edit/ })).toBeNull();
+    });
+
+    it('opens the form above the list, filled with the draft, Title focused (criterion 15)', async () => {
+      await openEdit();
+
+      const form = screen.getByRole('form', { name: 'Edit request' });
+      const list = screen.getByRole('list');
+      expect(form.compareDocumentPosition(list) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      expect(value('Description')).toBe('For the new hires');
+      expect(value('Title')).toBe('Laptops');
+      expect(value('Category')).toBe('other');
+      expect(value('Amount')).toBe('1250.00');
+      expect(value('Currency')).toBe('EUR');
+      expect(value('Supplier')).toBe(supplier().id);
+      expect(document.activeElement).toBe(screen.getByLabelText('Title'));
+      expect(within(form).getByRole('button', { name: 'Save changes' })).toBeTruthy();
+      expect(within(form).getByRole('button', { name: 'Cancel' })).toBeTruthy();
+      expect(screen.queryByRole('button', { name: 'Create request' })).toBeNull();
+      expect(screen.queryByRole('button', { name: 'New request' })).toBeNull();
+      expect(screen.queryByRole('form', { name: 'New request' })).toBeNull();
+    });
+
+    it('sends one PUT with all six fields, closes the form and re-fetches (criterion 16)', async () => {
+      const m = await openEdit();
+      fill('Title', 'Gaming laptops');
+      fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+
+      await waitFor(() => expect(screen.queryByRole('form', { name: 'Edit request' })).toBeNull());
+      expect(puts(m)).toHaveLength(1);
+      expect(puts(m)[0].url).toBe(PUT_URL);
+      expect(puts(m)[0].headers['X-User-Id']).toBe(ALICE);
+      expect(JSON.stringify(puts(m)[0].body)).toBe(
+        `{"title":"Gaming laptops","amountCents":125000,"currency":"EUR","supplierId":"${supplier().id}",` +
+          `"category":"other","description":"For the new hires"}`,
+      );
+      expect(m.count('POST', '/purchase-requests')).toBe(0);
+      await waitFor(() => expect(m.count('GET', '/purchase-requests/mine')).toBe(2));
+      const item = (await screen.findByText('Gaming laptops')).closest('li')!;
+      expect(within(item).getByText('Draft')).toBeTruthy();
+      expect(within(item).getByRole('button', { name: 'Submit Gaming laptops' })).toBeTruthy();
+      expect(within(item).getByRole('button', { name: 'Edit Gaming laptops' })).toBeTruthy();
+      expect(screen.getByRole('button', { name: 'New request' })).toBeTruthy();
+    });
+
+    it('closes on Cancel and sends nothing (criterion 17)', async () => {
+      const m = await openEdit();
+      fill('Title', 'Something else');
+      fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
+      expect(screen.queryByRole('form', { name: 'Edit request' })).toBeNull();
+      expect(puts(m)).toHaveLength(0);
+      expect(screen.getByText('Laptops')).toBeTruthy();
+      expect(m.count('GET', '/purchase-requests/mine')).toBe(1);
+    });
+
+    it('marks an empty Title and sends nothing (criterion 17)', async () => {
+      const m = await openEdit();
+      fill('Title', '');
+      fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+
+      const title = screen.getByLabelText('Title');
+      expect(title.getAttribute('aria-invalid')).toBe('true');
+      expect(document.getElementById('title-error')?.textContent).toBe(
+        'Enter a title of 1 to 200 characters.',
+      );
+      expect(puts(m)).toHaveLength(0);
+    });
+
+    it('shows the API message and keeps the form open when the save fails (criterion 18)', async () => {
+      const m = await openEdit({
+        [PUT_ROUTE]: fail(409, { statusCode: 409, message: 'only a draft can be edited' }),
+      });
+      fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+
+      expect((await screen.findByRole('alert')).textContent).toContain(
+        'only a draft can be edited',
+      );
+      expect(screen.getByRole('form', { name: 'Edit request' })).toBeTruthy();
+      expect(puts(m)).toHaveLength(1);
+      expect(m.count('GET', '/purchase-requests/mine')).toBe(1);
+    });
+
+    it('fills fields from Suggest fields, then saves them with the PUT (criterion 18)', async () => {
+      const NORDIC = supplier({ id: ID(901), name: 'Nordic Laptops' });
+      const SUGGESTION = {
+        title: 'Laptops for the new hires',
+        category: 'hardware',
+        quantity: 5,
+        amountCents: 600_000,
+        currency: 'EUR',
+        supplierId: NORDIC.id,
+      };
+      const m = await openEdit({
+        'GET /suppliers': [supplier(), NORDIC],
+        'POST /purchase-requests/suggestion': { suggestion: SUGGESTION },
+      });
+      await screen.findByRole('option', { name: 'Nordic Laptops' });
+      const suggest = screen.getByRole('button', { name: 'Suggest fields' }) as HTMLButtonElement;
+      expect(suggest.disabled).toBe(false);
+      fireEvent.click(suggest);
+
+      await screen.findByText('Suggested', { selector: '#title-suggested' });
+      expect(m.count('POST', '/purchase-requests/suggestion')).toBe(1);
+      expect(m.calls.find((c) => c.url === '/api/purchase-requests/suggestion')!.body).toEqual({
+        description: 'For the new hires',
+      });
+      expect(value('Title')).toBe('Laptops for the new hires');
+      expect(value('Category')).toBe('hardware');
+      expect(value('Amount')).toBe('6000.00');
+      expect(value('Supplier')).toBe(NORDIC.id);
+      expect(
+        [...document.querySelectorAll('.suggested-tag')].map((t) => t.id.replace('-suggested', '')),
+      ).toEqual(['title', 'category', 'amount', 'currency', 'supplier']);
+
+      fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+      await waitFor(() => expect(puts(m)).toHaveLength(1));
+      expect(puts(m)[0].body).toEqual({
+        title: 'Laptops for the new hires',
+        amountCents: 600_000,
+        currency: 'EUR',
+        supplierId: NORDIC.id,
+        category: 'hardware',
+        description: 'For the new hires',
+      });
+      expect(m.count('POST', '/purchase-requests')).toBe(0);
+    });
+  });
+
   describe('suggest fields (Phase 4)', () => {
     const HAPPY = 'need 20 laptops for new sales hires, ~€1,200 each, prefer Nordic Laptops';
     const NORDIC = supplier({ id: ID(901), name: 'Nordic Laptops' });
