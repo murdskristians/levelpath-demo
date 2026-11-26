@@ -213,6 +213,12 @@ One entry per new concept: what it is, why it matters, where it lives in this re
 - **Why it matters:** A purchase description can hold names, prices or anything a user pastes. The hash still lets you see that the same text failed three times, and the length and latency explain most problems, without the log becoming a second copy of user data.
 - **Where:** the `llm_suggestion` line at the end of `suggest` in [suggestions.service.ts](../apps/api/src/suggestions/suggestions.service.ts); the log tests in [suggestions.service.spec.ts](../apps/api/src/suggestions/suggestions.service.spec.ts).
 
+## An edit as a full replacement, with the create schema (edit a draft)
+
+- **What:** `PUT /purchase-requests/:id` takes the same body as `POST /purchase-requests`, parsed by the same strict `createPurchaseRequestSchema`, and replaces all six fields. A field left out takes its default, so the form always sends every field. The service copies submit: a select filtered by the caller's id (404 for anything else), 409 for a non-draft, then an `UPDATE … WHERE status = 'draft'`.
+- **Why it matters:** One schema means create and edit can't drift apart, and the strict keys mean the client can't change the status, the requester or the tenant. A partial `PATCH` would need a second schema in which every field is optional and nothing has a default, so leaving a field out keeps it.
+- **Where:** `update` in [purchase-requests.service.ts](../apps/api/src/purchase-requests/purchase-requests.service.ts), [update.spec.ts](../apps/api/src/purchase-requests/update.spec.ts), [NewRequestForm.tsx](../apps/web/src/components/NewRequestForm.tsx).
+
 ## A code graph for agents: graphify (experiment)
 
 - **What:** [graphify](https://github.com/Graphify-Labs/graphify) parses the repo into a graph of files, symbols and the links between them (`graphify update .`, no LLM). Agents ask it with `graphify query "<question>"`, `explain` and `path` instead of grepping and reading whole files. Hooks in `.claude/settings.json` remind every agent before a Grep, Read, Glob or Bash call; they never block one.
