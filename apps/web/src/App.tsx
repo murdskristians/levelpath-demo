@@ -1,4 +1,4 @@
-import type { PurchaseRequest, Supplier } from '@levelpath/shared';
+import type { CreatePurchaseRequestInput, PurchaseRequest, Supplier } from '@levelpath/shared';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import './App.css';
 import { createApi, type Me } from './api';
@@ -10,6 +10,8 @@ import { UserPicker } from './components/UserPicker';
 import { loadUserId, saveUserId } from './users';
 
 type DecideInput = { decision: 'approved' | 'rejected'; comment: string };
+/** The one open form: a new request, or the draft being edited. */
+type FormState = { mode: 'create' } | { mode: 'edit'; request: PurchaseRequest } | null;
 
 /** Everything for one user. App keys it by user id, so switching users resets it all. */
 function Dashboard({ userId, picker }: { userId: string; picker: ReactNode }) {
@@ -18,7 +20,7 @@ function Dashboard({ userId, picker }: { userId: string; picker: ReactNode }) {
   const [mine, setMine] = useState<PurchaseRequest[] | null>(null);
   const [toDecide, setToDecide] = useState<PurchaseRequest[] | null>(null);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
-  const [formOpen, setFormOpen] = useState(false);
+  const [form, setForm] = useState<FormState>(null);
   const [error, setError] = useState<unknown>(null);
 
   // Drops responses that arrive after this user's dashboard is gone.
@@ -67,15 +69,16 @@ function Dashboard({ userId, picker }: { userId: string; picker: ReactNode }) {
       () => api.decide(id, input),
       () => Promise.all([loadToDecide(), loadMine()]),
     );
-  const create = async (input: Parameters<typeof api.createRequest>[0]) => {
+  /** Creates or updates, by the open form; a failure keeps the form open with the alert. */
+  const save = async (input: CreatePurchaseRequestInput) => {
+    if (!form) return;
     setError(null);
-    if (
-      await run(
-        () => api.createRequest(input),
-        () => undefined,
-      )
-    ) {
-      setFormOpen(false);
+    const call =
+      form.mode === 'edit'
+        ? () => api.updateRequest(form.request.id, input)
+        : () => api.createRequest(input);
+    if (await run(call, () => undefined)) {
+      setForm(null);
       await loadMine();
     }
   };
@@ -95,18 +98,30 @@ function Dashboard({ userId, picker }: { userId: string; picker: ReactNode }) {
         <ErrorAlert error={error} />
         <section aria-labelledby="purchase-requests-heading">
           <h2 id="purchase-requests-heading">Purchase requests</h2>
-          {formOpen && (
+          {form && (
             <NewRequestForm
+              // Another draft remounts the form, with its own values and the focus on Title.
+              key={form.mode === 'edit' ? form.request.id : 'new'}
               suppliers={suppliers}
-              onCreate={create}
+              initial={form.mode === 'edit' ? form.request : undefined}
+              onSave={save}
               // Not through `run`: a failed suggestion is the form's note, never the ErrorAlert.
               onSuggest={(description) => api.suggest(description)}
-              onCancel={() => setFormOpen(false)}
+              onCancel={() => setForm(null)}
             />
           )}
-          {mine && <RequestList requests={mine} onSubmit={(id) => void submit(id)} />}
-          {!formOpen && (
-            <button type="button" onClick={() => setFormOpen(true)}>
+          {mine && (
+            <RequestList
+              requests={mine}
+              onSubmit={(id) => void submit(id)}
+              onEdit={(request) => {
+                setError(null);
+                setForm({ mode: 'edit', request });
+              }}
+            />
+          )}
+          {!form && (
+            <button type="button" onClick={() => setForm({ mode: 'create' })}>
               New request
             </button>
           )}
