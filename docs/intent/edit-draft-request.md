@@ -1,6 +1,6 @@
 # Intent: Edit a draft purchase request before submitting it
 
-<!-- Written by /intent with Chris (2026-11-26), from "requesters can edit a draft purchase request before submitting it" and Chris's answers. It names no files on purpose: it is the task of the graphify A/B test. -->
+<!-- Written by /intent with Chris (2026-11-26), from "requesters can edit a draft purchase request before submitting it" and Chris's answers. It names no files on purpose, so the agents have to find the code themselves. -->
 
 ## Problem
 

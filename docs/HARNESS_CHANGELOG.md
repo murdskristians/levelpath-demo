@@ -666,3 +666,17 @@ Format:
   - The graph keeps itself current, and its absence is visible.
   - Cleanup no longer depends on Windows' timing.
   - Each of the small fixes has a test.
+
+## 2026-11-27: graphify was used but not credited or documented
+
+- **What went wrong:** the pre-demo review found three gaps:
+  - graphify's skill (`.claude/skills/graphify/`) had been committed to this public repo without its licence, NOTICE or a line in `CREDITS.md`;
+  - `docs/HARNESS.md`, the "what it is" page, didn't mention the code graph or the `graph_first` hook;
+  - the README's setup didn't say to install graphify, so on another machine the agents would silently work without the graph.
+- **Before:** the graph was described only in `CLAUDE.md`, for agents.
+- **After:**
+  - **Licence:** graphify 0.9.119 is Apache 2.0, relicensed from MIT, so its `LICENSE` and `NOTICE` now sit next to the skill, and `CREDITS.md` has a graphify section.
+  - **`HARNESS.md`:** new section "The code graph" (what it is, who must use it, what it bought), plus rows in its parts table and its "Try it".
+  - **README:** the four setup commands.
+  - **Stale count:** the factory tests' count is 57, not 42.
+- **Why this prevents a repeat:** before third-party files are committed, check the package's licence files, not only the summary that `pip show` gives. The system Python's older graphify said MIT; the version the harness uses ships Apache 2.0 and a NOTICE.

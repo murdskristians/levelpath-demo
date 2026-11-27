@@ -11,11 +11,11 @@ One set of agent roles, three ways to drive them (the autonomy dial):
 ```
  L1 pair        /intent → /spec → /plan → builder agent → /verify → /review
  L2 supervised  /factory run <issue>            (a skill in a Claude Code session, with a dashboard)
- watch all     factory/bin/serve → http://127.0.0.1:8000   (the control room: Board + live Agents)
+ watch all      factory/bin/serve → http://127.0.0.1:8000   (the control room: Board + live Agents)
  L3 unattended  uv run adws/adw_sdlc_iso.py <issue>, or an `adw` comment on the issue
  ─────────────────────────────────────────────────────────────────────────────
  roles   intake · scout · planner · builder · verifier · reviewer-bugs · reviewer-spec · reviewer-security · approver
- gate    factory/checks.sh        guards   .claude/hooks/guard.py        rules   REVIEW.md · CLAUDE.md · skills
+ gate    factory/checks.sh        guards   .claude/hooks/guard.py        rules   REVIEW.md · CLAUDE.md · skills · code graph
  end     a ready PR that only a person merges
 ```
 
@@ -42,7 +42,16 @@ Ask the API who you are: `curl -H "X-User-Id: a0000000-0000-4000-8000-0000000001
 
 ## Use the harness
 
-Also needs [Claude Code](https://claude.com/claude-code), `gh` (logged in), `uv` and Python 3.11+.
+Also needs [Claude Code](https://claude.com/claude-code), `gh` (logged in), `uv`, Python 3.11+ and [graphify](https://github.com/Graphify-Labs/graphify), the code graph the planner and builder must query first. Set the graph up once, in the main checkout:
+
+```bash
+uv tool install graphifyy      # the graphify CLI
+graphify update .              # build the graph into graphify-out/ (git-ignored)
+graphify hook install          # git hooks rebuild it after every commit, checkout and pull
+git checkout .gitattributes    # undo the line hook install adds: graph.json isn't tracked
+```
+
+Without the graph the harness still works: the agents fall back to searching, and the `graph_first` hook warns once per agent.
 
 - **Pair (L1):** open Claude Code here and run `/intent <idea>`.
 - **Supervised (L2):** label an issue `factory`, then `/factory run <n>`.
