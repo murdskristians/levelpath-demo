@@ -199,31 +199,60 @@ def segments(cmd):
     return [s.strip() for s in re.split(r"&&|\|\||;|\|", cmd) if s.strip()]
 
 
+def git_command(seg):
+    """(directory from -C or None, subcommand, its arguments) for `git [options] <sub> …`,
+    else None. Options before the subcommand don't hide it: `git -C <dir> push`."""
+    words = seg.split()
+    for g, word in enumerate(words):
+        if word.strip("\"'").replace("\\", "/").rsplit("/", 1)[-1].lower() not in {"git", "git.exe"}:
+            continue
+        i, where = g + 1, None
+        while i < len(words) and words[i].startswith("-"):
+            if words[i] in ("-C", "-c") and i + 1 < len(words):
+                if words[i] == "-C":
+                    where = words[i + 1].strip("\"'")
+                i += 2
+            else:
+                i += 1
+        if i < len(words):
+            return where, words[i], words[i + 1:]
+    return None
+
+
 def check_merge(tool, inp, cwd):
     if tool not in SHELL_TOOLS:
         return
     cmd = inp.get("command", "")
     where = command_dir(cmd, cwd)
     for seg in segments(cmd):
-        words = seg.split()
         if re.search(r"\bgh\s+pr\s+merge\b", seg):
             block("agents never merge PRs (D9). Chris reviews and merges every PR on GitHub.")
         if re.search(r"\bgh\s+api\b", seg) and re.search(r"/merges?\b", seg):
             block("merging through the GitHub API is a merge too (D9). Chris merges.")
         if re.search(r"\bgh\s+pr\s+review\b", seg) and re.search(r"(\s--approve\b|\s-a\b)", seg):
             block("agents never approve PRs (D9): an agent can't approve its own work.")
-        if re.search(r"\bgit\s+push\b", seg):
+        git = git_command(seg)
+        if not git:
+            continue
+        sub_dir, sub, args = git
+        here = os.path.join(where, sub_dir) if sub_dir else where
+        if sub == "push":
+            # GitHub doesn't stop this: branch protection exempts admins, and the agents act as Chris.
             if re.search(r"\s(--force|-f|--force-with-lease)(=\S+)?(\s|$)", seg) or re.search(r"\s\+\S+", seg):
                 block("force-pushing is not allowed.")
-            refs = [w for w in words[words.index("push") + 1:] if not w.startswith("-")] if "push" in words else []
+            if {"--all", "--mirror"} & set(args):
+                block("pushing every branch would push main too (D9). Push your own branch.")
+            current = git_out(here, "rev-parse", "--abbrev-ref", "HEAD")
+            refs = [a for a in args if not a.startswith("-")]
             targets = {r.split(":")[-1].replace("refs/heads/", "") for r in refs[1:]}
+            targets = {current if t in {"HEAD", "@", ""} else t for t in targets}  # HEAD is the current branch
             if targets & BASE_BRANCHES:
                 block("pushing to main is not allowed (D9). Push your own branch; Chris merges the PR.")
-            if not refs[1:] and git_out(where, "rev-parse", "--abbrev-ref", "HEAD") in BASE_BRANCHES:
+            if not refs[1:] and current in BASE_BRANCHES:
                 block("this would push main (the current branch). Push a job branch instead.")
         # `git merge` itself, not `git merge-base` or `git merge-tree` (read-only)
-        if re.search(r"\bgit\s+merge(?![-\w])", seg) and "--abort" not in seg:
-            if git_out(where, "rev-parse", "--abbrev-ref", "HEAD") in BASE_BRANCHES:
+        if sub == "merge" and "--abort" not in args:
+            if git_out(here, "rev-parse", "--abbrev-ref", "HEAD") in BASE_BRANCHES:
                 block("merging into main is not allowed (D9). Merges happen on GitHub, by Chris.")
 
 

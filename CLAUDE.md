@@ -21,7 +21,7 @@ A small multi-tenant purchase-request app (Levelpath interview demo), built **th
 
 Try the API: `pnpm db:migrate && pnpm db:seed`, then `curl -H "X-User-Id: a0000000-0000-4000-8000-000000000101" localhost:3000/me` (Alice at Acme; the seeded ids are in `db/seed.sql`).
 
-One app on chosen ports (agents always do this): `API_PORT=<a> pnpm --filter @levelpath/api dev` and `pnpm --filter @levelpath/web dev --port <w> --strictPort`; stop with `factory/bin/port stop <port>`.
+One app on chosen ports (agents always do this): `API_PORT=<a> pnpm --filter @levelpath/api dev` and `API_PORT=<a> pnpm --filter @levelpath/web dev --port <w> --strictPort` (the web app's proxy needs `API_PORT` too, or it reaches the API on 3000); stop with `factory/bin/port stop <port>`.
 
 ## Architecture
 

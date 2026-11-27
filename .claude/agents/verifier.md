@@ -45,8 +45,10 @@ rely on the earlier check, and then say so in the Summary.
   Run a test yourself only to prove a specific finding.
 - Start what the criteria need, in the background from the worktree:
   `API_PORT=<a> pnpm --filter @levelpath/api dev` and
-  `pnpm --filter @levelpath/web dev --port <w> --strictPort`. Wait until they
-  answer (`curl -s localhost:<a>/health`).
+  `API_PORT=<a> pnpm --filter @levelpath/web dev --port <w> --strictPort` (the
+  web app needs `API_PORT` too: without it its proxy reaches port 3000, the
+  main checkout's API, not the branch's). Wait until they answer
+  (`curl -s localhost:<a>/health`).
 - **API criteria:** call the endpoint with `curl` and compare the status and
   body with the spec. Try the obvious wrong inputs too: a missing field, a
   wrong tenant, a crafted ID.

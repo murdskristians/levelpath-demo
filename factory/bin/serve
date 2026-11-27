@@ -66,13 +66,21 @@ REPO_URL = repo_url()
 # ---- runs: factory jobs and ADW runs as one list ------------------------------------
 
 
+def mtime(path):
+    """None for a file that went away meanwhile: the run's state save replaces its temporary file."""
+    try:
+        return path.stat().st_mtime
+    except FileNotFoundError:
+        return None
+
+
 def adw_job(adw_id):
     """An ADW run's state, in the shape of a factory job.json, so the board renders both."""
     folder = RUNS / adw_id
     state = json.loads((folder / "adw_state.json").read_text(encoding="utf-8"))
     stage = ADW_STAGES.get(state.get("stage"), state.get("stage"))
     started = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(min(
-        (p.stat().st_mtime for p in folder.iterdir()), default=time.time())))
+        (m for p in folder.iterdir() if (m := mtime(p)) is not None), default=time.time())))
     waiting = stage in {"needs-human", "needs-info", "merged", "rejected"}
     ended = (time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime((folder / "adw_state.json").stat().st_mtime))
              if waiting else None)

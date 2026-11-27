@@ -9,6 +9,8 @@ name is a bug and raises.
 import copy
 import json
 import os
+import threading
+import time
 from pathlib import Path
 from typing import Any, Optional
 
@@ -35,7 +37,14 @@ FIELDS = {
 }
 
 
+SAVE_TRIES, SAVE_WAIT = 50, 0.1  # up to 5 s for a reader to let go of adw_state.json
+
+
 class ADWState:
+    # One per process: reviewers run in parallel threads and each records its cost.
+    # Hold it around a read-modify-write of a field (pipeline.add_cost).
+    lock = threading.RLock()
+
     def __init__(self, adw_id: str):
         if not adw_id:
             raise ValueError("an ADW run needs an id")
@@ -62,11 +71,23 @@ class ADWState:
             self.data["all_adws"].append(script)
 
     def save(self, step: Optional[str] = None) -> None:
-        """Write atomically, so a reader (the control room) never sees half a file."""
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        tmp = self.path.with_suffix(".tmp")
-        tmp.write_text(json.dumps(self.data, indent=2), encoding="utf-8")
-        os.replace(tmp, self.path)
+        """Write atomically, so a reader (the control room) never sees half a file.
+
+        On Windows the replace fails while any reader has the file open, and the
+        control room reads it every 2 seconds: retry, as factory/bin/job does. The lock
+        keeps the parallel reviewers' saves from writing the same temporary file."""
+        with ADWState.lock:
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+            tmp = self.path.with_suffix(".tmp")
+            tmp.write_text(json.dumps(self.data, indent=2), encoding="utf-8")
+            for attempt in range(SAVE_TRIES):
+                try:
+                    os.replace(tmp, self.path)
+                    return
+                except PermissionError:
+                    if attempt + 1 == SAVE_TRIES:
+                        raise
+                    time.sleep(SAVE_WAIT)
 
     @classmethod
     def load(cls, adw_id: str) -> Optional["ADWState"]:

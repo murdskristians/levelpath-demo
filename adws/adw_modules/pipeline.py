@@ -17,6 +17,7 @@ import os
 import subprocess
 import sys
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Dict, Optional, Tuple
 
@@ -47,10 +48,11 @@ def folder(state: ADWState) -> Path:
 
 
 def add_cost(state: ADWState, key: str, usd: float) -> None:
-    costs = dict(state.get("costs") or {})
-    costs[key] = round(costs.get(key, 0.0) + usd, 4)
-    state.update(costs=costs)
-    state.save()
+    with ADWState.lock:  # parallel reviewers: without it one's cost can overwrite another's
+        costs = dict(state.get("costs") or {})
+        costs[key] = round(costs.get(key, 0.0) + usd, 4)
+        state.update(costs=costs)
+        state.save()
 
 
 def role(state: ADWState, logger, name: str, prompt: str, model: Optional[str] = None,
@@ -209,10 +211,10 @@ def review(state: ADWState, logger) -> Dict[str, str]:
     rd = roles.round_dir(state.get("adw_id"), n)
     reviewers: Dict[str, str] = state.get("agents", {}).get("reviewers", {})
 
-    def one(key: str, model: str) -> None:
+    def one(key: str, model: str, retry: bool = False) -> None:
         extra = f" {roles.ports_line(state)}" if key == "verify" else ""
         role(state, logger, roles.reviewer_agent(key), f"{roles.header(state)}\nReview round {n}.{extra}",
-             model=model, tag=f"review-{key}-r{n}")
+             model=model, tag=f"review-{key}-r{n}" + ("-retry" if retry else ""))  # its own log
 
     with ThreadPoolExecutor(max_workers=len(reviewers) or 1) as pool:  # WAIT FOR ALL
         list(pool.map(lambda kv: one(*kv), reviewers.items()))
@@ -220,7 +222,7 @@ def review(state: ADWState, logger) -> Dict[str, str]:
     for key, model in reviewers.items():
         line = roles.first_line(rd / f"review-{key}.md") or ""
         if line not in ("VERDICT: PASS", "VERDICT: CHANGES"):
-            one(key, model)  # once more: no file, or no verdict line
+            one(key, model, retry=True)  # once more: no file, or no verdict line
             line = roles.first_line(rd / f"review-{key}.md") or ""
         verdicts[key] = line.removeprefix("VERDICT: ") if line.startswith("VERDICT: ") else "invalid"
     logger.info(f"round {n} verdicts: {verdicts}")
@@ -369,13 +371,42 @@ def screenshots(state: ADWState, n: int) -> list:
 # ---- entry points the phase scripts call -----------------------------------------------
 
 
+@contextmanager
+def on_crash(state: ADWState, logger):
+    """An unexpected error (a GitHub call that failed, a bug) ends the run at
+    needs-human with the error in decision.md, then is raised again. Without this the
+    run's last stage stays a running one, and the board shows it running for good."""
+    try:
+        yield
+    except Stop:
+        raise
+    except Exception as e:
+        stage = state.get("stage")
+        logger.exception(f"the run crashed at stage {stage}: {type(e).__name__}: {e}")
+        why = (f"The run crashed at stage {stage}: `{type(e).__name__}: {str(e)[:300]}`. The traceback is in "
+               f"`agents/{state.get('adw_id')}/<script>/execution.log`. Nothing was merged.")
+        try:
+            escalate(state, logger, why)
+        except Exception as again:  # GitHub may be what failed: the board still has to show it
+            logger.exception(f"couldn't post the crash on GitHub: {type(again).__name__}: {again}")
+            state.update(stage="needs-human")
+            state.save("crashed")
+        raise
+
+
 def sdlc(state: ADWState, logger) -> None:
-    plan(state, logger)
-    run_rounds(state, logger, "This is round 1: implement spec.md following plan.md.")
+    with on_crash(state, logger):
+        plan(state, logger)
+        run_rounds(state, logger, "This is round 1: implement spec.md following plan.md.")
 
 
 def patch(state: ADWState, logger, feedback: str) -> None:
     """Your feedback on a run that is waiting for you: another set of rounds."""
+    with on_crash(state, logger):
+        _patch(state, logger, feedback)
+
+
+def _patch(state: ADWState, logger, feedback: str) -> None:
     d = folder(state)
     k = len(list(d.glob("feedback-*.md"))) + 1
     (d / f"feedback-{k}.md").write_text(f"# Feedback {k}\n\nFrom @{gh.operator()} on the issue.\n\n"

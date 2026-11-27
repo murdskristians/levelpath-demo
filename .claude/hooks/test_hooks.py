@@ -124,6 +124,13 @@ for cmd in ["gh pr merge 3", "gh pr merge 3 --squash --admin", "cd x && gh pr me
             "git push origin main", "git push origin HEAD:main", "git push origin :main",
             "git push --force origin feature", "git push -f origin feature", "git push origin +feature"]:
     expect(f"`{cmd}`", True, "Bash", command=cmd)
+for cmd in ["git push origin HEAD", "git push -u origin HEAD", "git push origin @", "git push --all origin",
+            "git push --mirror origin", f"git -C {M} push", f"git -C {M} push origin HEAD", "/usr/bin/git push origin main"]:
+    expect(f"`{cmd}` on main", True, "Bash", command=cmd)
+expect(f"`git -C <main> merge feature` from a job worktree", True, "Bash", cwd=FW, command=f"git -C {M} merge feature")
+expect("`git push origin HEAD` from a job worktree (its own branch)", False, "Bash", command=f"cd {FW} && git push origin HEAD")
+expect(f"`git -C <job worktree> push -u origin HEAD`", False, "Bash", command=f"git -C {FW} push -u origin HEAD")
+expect("`git commit -m \"push it\"` on main (not a push)", False, "Bash", command='git commit -m "push it"')
 expect("`git push` on main", True, "Bash", command="git push")
 expect("`git push origin` on main", True, "Bash", command="git push origin")
 expect("`git merge feature` on main", True, "Bash", command="git merge feature")
