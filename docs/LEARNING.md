@@ -213,7 +213,7 @@ One entry per new concept: what it is, why it matters, where it lives in this re
 - **Why it matters:** A purchase description can hold names, prices or anything a user pastes. The hash still lets you see that the same text failed three times, and the length and latency explain most problems, without the log becoming a second copy of user data.
 - **Where:** the `llm_suggestion` line at the end of `suggest` in [suggestions.service.ts](../apps/api/src/suggestions/suggestions.service.ts); the log tests in [suggestions.service.spec.ts](../apps/api/src/suggestions/suggestions.service.spec.ts).
 
-## A code graph for agents: graphify (experiment)
+## A code graph for agents: graphify
 
 - **What:** [graphify](https://github.com/Graphify-Labs/graphify) parses the repo into a graph of files, symbols and the links between them (`graphify update .`, no LLM). Agents ask it with `graphify query "<question>"`, `explain` and `path` instead of grepping and reading whole files. Hooks in `.claude/settings.json` remind every agent before a Grep, Read, Glob or Bash call; they never block one.
 - **Why it matters:** most of an agent's cost is reading. On the theme toggle, a Sonnet builder read 0.5M to 1.4M tokens; if the graph points it at the right lines first, it should read less. An A/B test on all three drivers (2026-11-26/27) found that, on a repo this small, it does only a little: planners made about 16% fewer tool calls, but total exploration tokens fell by 3% (by 10% using the better of two L3 runs) and quality didn't change.

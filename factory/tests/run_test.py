@@ -387,6 +387,26 @@ check("merged: needs-human label removed",
 check("merged: dev server stopped", server.poll() is not None)
 check("merged: worktree removed", not Path(wt).exists(), wt)
 
+# ---- 10b. `port stop` stops the whole dev command, not only the process that listens ----
+if os.name == "nt" and shutil.which("node"):
+    tport = 5191
+    child = f"require('http').createServer().listen({tport})"
+    parent = subprocess.Popen(["node", "-e", f"require('child_process').spawn(process.execPath, ['-e', {json.dumps(child)}],"
+                               " {stdio: 'ignore'}); setInterval(() => {}, 1e6)"],
+                              stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    for _ in range(30):  # the child needs a moment to listen
+        if sh([BASH, "-lc", f"factory/bin/port pid {tport}"], proj, env=env).stdout.strip():
+            break
+        time.sleep(0.5)
+    r = sh([BASH, "-lc", f"factory/bin/port stop {tport}"], proj, env=env)
+    time.sleep(1)
+    alive = parent.poll() is None
+    check("port stop also stops the node process that started the server (Windows)",
+          not alive and not sh([BASH, "-lc", f"factory/bin/port pid {tport}"], proj, env=env).stdout.strip(),
+          r.stdout + r.stderr)
+    if alive:
+        parent.kill()
+
 # ---- 11. the control room files a pasted intent under its own title ----
 loader = importlib.machinery.SourceFileLoader("factory_serve", str(SRC / "factory/bin/serve"))
 spec = importlib.util.spec_from_loader("factory_serve", loader)

@@ -3,11 +3,19 @@
 
 Usage:
   port pid <port>     print the PIDs listening on <port>, one per line
-  port stop <port>    stop them (and, on Windows, their child processes)
+  port stop <port>    stop them (and, on Windows, the dev command that started them)
 
 Agents use this to stop only the dev server on their own port: other jobs run
 dev servers too, so never stop servers by process name. It exists because
 Windows has no `lsof`.
+
+On Windows, `pnpm … dev` is a chain of processes (cmd → node pnpm → cmd → node
+nest/vite → node server), and only the last one listens. Killing just that one
+left the rest running: 400 MB each, with their working folder in the job's
+worktree, which Windows then refuses to delete (WinError 32). So `stop` walks up
+from the listener while the parent is part of such a chain (node, cmd, pnpm),
+stops below anything else (the agent's shell) and below its own callers, and
+kills that whole tree.
 """
 
 import os
@@ -39,9 +47,59 @@ def listening_pids(port):
     return sorted({int(p) for p in res.stdout.split()})
 
 
+LAUNCHERS = {"node.exe", "cmd.exe", "pnpm.exe", "npm.exe", "npx.exe"}  # what `pnpm … dev` is made of
+
+
+def processes():
+    """{pid: (parent pid, lower-case name, creation ticks)} for every process, in one call."""
+    script = ("Get-CimInstance Win32_Process | ForEach-Object { "
+              "\"$($_.ProcessId),$($_.ParentProcessId),$($_.Name),$($_.CreationDate.Ticks)\" }")
+    out = subprocess.run(["powershell", "-NoProfile", "-Command", script], capture_output=True, text=True,
+                         timeout=60, check=True).stdout
+    table = {}
+    for line in out.splitlines():
+        fields = line.strip().split(",", 2)  # pid, parent pid, "name,ticks" (a name may hold a comma)
+        if len(fields) != 3 or not (fields[0].isdigit() and fields[1].isdigit()) or "," not in fields[2]:
+            continue
+        name, ticks = fields[2].rsplit(",", 1)
+        table[int(fields[0])] = (int(fields[1]), name.lower(), int(ticks) if ticks.isdigit() else 0)
+    return table
+
+
+def ancestors(pid, table):
+    chain = set()
+    while pid in table and pid not in chain:
+        chain.add(pid)
+        pid = table[pid][0]
+    return chain
+
+
+def dev_command_root(pid):
+    """The top of the dev command that owns this listener (see the module docstring)."""
+    try:
+        table = processes()
+    except (OSError, subprocess.SubprocessError, ValueError) as err:
+        print(f"port: can't read the process table ({err}); stopping only the listener PID {pid}",
+              file=sys.stderr)
+        return pid
+    mine = ancestors(os.getpid(), table)  # never walk into whoever called this script
+    root = pid
+    while root in table:
+        parent = table[root][0]
+        if parent not in table or parent in mine or table[parent][1] not in LAUNCHERS:
+            break
+        if table[parent][2] > table[root][2] > 0:
+            break  # a PID Windows reused: the "parent" started after its child
+        root = parent
+    return root
+
+
 def stop(pid):
     if WINDOWS:
-        res = subprocess.run(["taskkill", "/F", "/T", "/PID", str(pid)], capture_output=True, text=True)
+        root = dev_command_root(pid)
+        res = subprocess.run(["taskkill", "/F", "/T", "/PID", str(root)], capture_output=True, text=True)
+        if res.returncode != 0 and root != pid:  # the chain may have ended on its own meanwhile
+            res = subprocess.run(["taskkill", "/F", "/T", "/PID", str(pid)], capture_output=True, text=True)
         return res.returncode == 0
     try:
         os.kill(pid, signal.SIGTERM)

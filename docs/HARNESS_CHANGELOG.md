@@ -680,3 +680,15 @@ Format:
   - **README:** the four setup commands.
   - **Stale count:** the factory tests' count is 57, not 42.
 - **Why this prevents a repeat:** before third-party files are committed, check the package's licence files, not only the summary that `pip show` gives. The system Python's older graphify said MIT; the version the harness uses ships Apache 2.0 and a NOTICE.
+
+## 2026-11-27: `port stop` left the dev command running
+
+- **What went wrong:** the pre-demo review started the API with `pnpm --filter @levelpath/api dev` and stopped it with `factory/bin/port stop`. The port was freed, but a node process of the same command kept running, holding 400 MB, until it was killed by hand.
+  - **Why:** on Windows, `pnpm … dev` is a chain of processes (cmd → node pnpm → cmd → node nest or vite → node server). `port stop` killed the listener and its children, never the processes above it.
+  - **Effect:** every builder and verifier in all three drivers stops its servers this way, so each run likely left such processes behind. Their working folder is inside the job's worktree, which is the likely cause of the WinError 32 cleanup failures that the retry (same day) only works around.
+- **Before:** `taskkill /F /T` on the listening PID only.
+- **After:** on Windows, `port stop` reads the process table once (PowerShell), walks up from the listener while the parent is node, cmd or pnpm, and kills that whole tree. The walk stops below anything else (the agent's shell), below its own callers, and at a parent that started after its child (a reused PID).
+  - **Tested on real servers:** the real API and web dev servers leave no node process behind (2 → 0, and 1 → 0).
+  - **Factory test:** a node parent with a listening child is stopped completely.
+  - **Also:** `graphify update` is no longer pre-approved in `.claude/settings.json`. Agents must never run it, and the git hooks rebuild the graph.
+- **Why this prevents a repeat:** the thing that started a server is what gets stopped, so a run leaves neither memory nor folder handles behind.
