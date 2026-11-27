@@ -105,7 +105,7 @@ def plan(state: ADWState, logger) -> None:
     if decision not in {"ACCEPT", "NEEDS-INFO", "REJECT"}:
         raise Stop(f"intake.md has no valid DECISION line ({decision!r}); see agents/{adw_id}/logs/intake.jsonl")
     surfaces = [s.strip() for s in h.get("SURFACES", "").split(",") if s.strip() and s.strip() != "none"]
-    state.update(task_type=h.get("TYPE", "feature").lower(), risk=roles.CONFIG.get("pin_risk") or h.get("RISK", "medium"), surfaces=surfaces)
+    state.update(task_type=h.get("TYPE", "feature").lower(), risk=h.get("RISK", "medium"), surfaces=surfaces)
     say(state, "intake", f"**{decision}** (type {state.get('task_type')}, risk {state.get('risk')}, "
                          f"surfaces: {', '.join(surfaces) or 'none'})\n\n{roles.body_after_header(d / 'intake.md')}")
     if decision == "NEEDS-INFO":

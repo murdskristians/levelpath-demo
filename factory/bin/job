@@ -411,7 +411,7 @@ def sync(job):
         job["intake"] = {
             "decision": h.get("DECISION"),
             "rescoped": h.get("RESCOPED") == "yes",
-            "risk": CONFIG.get("pin_risk") or h.get("RISK"),  # pin_risk: the graphify A/B test holds models equal
+            "risk": h.get("RISK"),
             "surfaces": [s.strip() for s in h.get("SURFACES", "").split(",")
                          if s.strip() and s.strip() != "none"],
         }

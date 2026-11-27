@@ -2,7 +2,6 @@
   "concurrency": 2,
   "max_rounds": 3,
   "base_branch": "main",
-  "pin_risk": "medium",
   "labels": {
     "queue": "factory",
     "needs_info": "factory:needs-info",
