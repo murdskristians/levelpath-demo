@@ -3,6 +3,24 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <script>
+      (function () {
+        var theme;
+        try {
+          var stored = localStorage.getItem('levelpath.theme');
+          if (stored === 'light' || stored === 'dark') theme = stored;
+        } catch (err) {
+          console.warn('levelpath: could not read the stored theme', err);
+        }
+        if (!theme) {
+          theme =
+            window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches
+              ? 'dark'
+              : 'light';
+        }
+        document.documentElement.setAttribute('data-theme', theme);
+      })();
+    </script>
     <title>Levelpath Demo</title>
   </head>
   <body>
