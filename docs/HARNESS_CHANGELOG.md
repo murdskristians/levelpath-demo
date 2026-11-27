@@ -627,3 +627,16 @@ Format:
 - **Before:** graph use was a sentence in the role.
 - **After:** `.claude/hooks/graph_first.py`, a PreToolUse hook in the planner's and builder's frontmatter. When the main checkout has the graph, it blocks the agent's first read or search of `apps/`, `packages/` or `db/` until it has run one `graphify query`, `explain` or `path`, and the block message tells it the command. It does nothing without a graph, and it logs every block and query. It is covered by 16 cases in `test_hooks.py`, and was checked on the real planner, headless (L3) and as a subagent (L1/L2), before any run.
 - **Why this prevents a repeat:** a hook is enforced where an instruction is only advice. More generally: check a behaviour change on one real agent before asking for a batch of runs.
+
+## 2026-11-27: a missing decision.md and a skipped /verify turned READY runs into ESCALATE
+
+- **What went wrong:** two kinds of good run ended as "needs a human":
+  - **L3:** twice, the approver put its decision in its reply and never wrote `decision.md`. The pipeline reads only the file, so it recorded ESCALATE.
+  - **L1:** `/review` ran before `/verify`. Instead of stopping, it ran the gate itself and the reviewers without the verifier. The approver then had no verifier review and escalated.
+- **Before:** the ADW escalated at once when `decision.md` was missing. The factory skill didn't say what to do when `job advance` refused for that reason. `/review` ran its own gate when no `/verify` round matched the code.
+- **After:**
+  - **ADW:** `pipeline.approve()` runs the approver once more, telling it the file is missing, and escalates only if it is missing again.
+  - **Factory skill:** resume the approver once with the same message.
+  - **Approver role:** says the reply is never read, so the file is all that counts.
+  - **`/review`:** stops and asks for `/verify <slug>` when the round has no `review-verify.md` for the current code.
+- **Why this prevents a repeat:** the agents' files stay the only answer (nothing is parsed from prose). A missing file now gets one retry, as the builder's and reviewers' files already did. In L1, the verifier can no longer be skipped by running the steps out of order.

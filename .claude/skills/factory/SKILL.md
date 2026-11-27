@@ -171,6 +171,12 @@ verifier's screenshots shown inline, uploaded by `factory/bin/shots`) and labels
 the issue `factory:needs-human`. Never merge a PR, and never run `gh pr merge`:
 the person reviews the PR and merges it.
 
+If `advance` refuses because `decision.md` is missing or doesn't start with
+`READY` or `ESCALATE`, resume the approver once with SendMessage: its file is
+missing, and it must write it now with the Write tool, from the decision it
+already made. Then run `advance` again. Never write `decision.md` yourself,
+not even from the approver's reply. If it still refuses, stop and tell the user.
+
 A job is finished for this run when it reaches `merged`, `rejected`,
 `needs-info` or `needs-human`.
 

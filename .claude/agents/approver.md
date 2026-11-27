@@ -97,4 +97,7 @@ skim on the dashboard. The detail goes in the sections below it.
 The first line must be exactly `READY` or `ESCALATE`. Either way, the factory
 posts everything below it as a comment on the PR, and a person merges.
 
+Write the file with the Write tool before you reply. Nothing reads your reply:
+a decision that is only in your reply is lost, and the run escalates.
+
 When you're done, reply with one line: the first line of decision.md.

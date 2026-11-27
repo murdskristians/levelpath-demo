@@ -274,11 +274,17 @@ def approve(state: ADWState, logger) -> None:
     state.update(stage="approve")
     state.save("approve")
     n, d = state.get("round"), folder(state)
-    role(state, logger, "approver", f"{roles.header(state)} PR: #{state.get('pr_number')}. Final round: {n}.")
-    if roles.first_line(d / "decision.md") not in ("READY", "ESCALATE"):
-        escalate(state, logger, "The approver didn't write a READY or ESCALATE decision.")
-        return
-    hand_over(state, logger)
+    prompt = f"{roles.header(state)} PR: #{state.get('pr_number')}. Final round: {n}."
+    for attempt in range(2):
+        role(state, logger, "approver", prompt, tag="approver" + ("-retry" if attempt else ""))
+        if roles.first_line(d / "decision.md") in ("READY", "ESCALATE"):
+            hand_over(state, logger)
+            return
+        # Seen twice: the decision was in the reply but never written. Only the file counts.
+        logger.warning("the approver didn't write decision.md; running it once more")
+        prompt += ("\ndecision.md is missing or doesn't start with READY or ESCALATE. Write it now with "
+                   "the Write tool, in the format your role gives. Your reply is not read: only the file counts.")
+    escalate(state, logger, "The approver didn't write a READY or ESCALATE decision, twice.")
 
 
 def escalate(state: ADWState, logger, why: str) -> None:
