@@ -221,7 +221,8 @@ def check_merge(tool, inp, cwd):
                 block("pushing to main is not allowed (D9). Push your own branch; Chris merges the PR.")
             if not refs[1:] and git_out(where, "rev-parse", "--abbrev-ref", "HEAD") in BASE_BRANCHES:
                 block("this would push main (the current branch). Push a job branch instead.")
-        if re.search(r"\bgit\s+merge\b", seg) and "--abort" not in seg:
+        # `git merge` itself, not `git merge-base` or `git merge-tree` (read-only)
+        if re.search(r"\bgit\s+merge(?![-\w])", seg) and "--abort" not in seg:
             if git_out(where, "rev-parse", "--abbrev-ref", "HEAD") in BASE_BRANCHES:
                 block("merging into main is not allowed (D9). Merges happen on GitHub, by Chris.")
 

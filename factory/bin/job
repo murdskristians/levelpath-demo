@@ -659,6 +659,9 @@ def job_ports(job):
     return [ports["base"] + ports["step"] * n + k for k in range(3)]
 
 
+REMOVE_TRIES, REMOVE_WAIT = 4, 5  # up to ~15 s for Windows to let go of a stopped server's files
+
+
 def rmtree_long(path):
     """Delete a folder even when its paths pass Windows' 260-character limit
     (pnpm's node_modules do), and even when git made files read-only."""
@@ -686,12 +689,19 @@ def remove_worktree(job):
     stop_ports(job)
     res = run(["git", "worktree", "remove", "--force", job["worktree"]], check=False)
     if res.returncode != 0 and Path(job["worktree"]).exists():
-        # git can't delete paths over 260 characters on Windows ("Filename too long")
-        try:
-            rmtree_long(job["worktree"])
-        except OSError as e:
-            print(f"job: couldn't remove {job['worktree']}: {e}. Close whatever still has files "
-                  "open there, delete the folder, then run `git worktree prune`.", file=sys.stderr)
+        # git can't delete paths over 260 characters on Windows ("Filename too long"), and a
+        # process that just stopped can hold files for a few seconds (WinError 32): retry
+        for attempt in range(REMOVE_TRIES):
+            try:
+                rmtree_long(job["worktree"])
+                break
+            except OSError as e:
+                if attempt + 1 < REMOVE_TRIES:
+                    time.sleep(REMOVE_WAIT)
+                    continue
+                print(f"job: couldn't remove {job['worktree']} after {REMOVE_TRIES} tries: {e}. Close "
+                      "whatever still has files open there, delete the folder, then run "
+                      "`git worktree prune`.", file=sys.stderr)
     run(["git", "worktree", "prune"], check=False)
     run(["git", "branch", "-D", job["branch"]], check=False)
 

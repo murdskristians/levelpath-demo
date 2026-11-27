@@ -10,6 +10,8 @@ import shutil
 import socket
 import stat
 import subprocess
+import sys
+import time
 from pathlib import Path
 from typing import Tuple
 
@@ -40,14 +42,30 @@ def create(adw_id: str, branch: str, base: str) -> Path:
     return path
 
 
-def remove(adw_id: str) -> None:
+REMOVE_TRIES, REMOVE_WAIT = 4, 5  # up to ~15 s for Windows to let go of a stopped server's files
+
+
+def remove(adw_id: str) -> bool:
+    """Remove trees/<adw_id>. False (with the reason on stderr) when the folder is still there."""
     path = path_of(adw_id)
     res = git("worktree", "remove", "--force", str(path))
     if res.returncode != 0 and path.exists():
-        # git can't delete paths over 260 characters on Windows ("Filename too long"),
-        # and pnpm's node_modules have them
-        rmtree_long(path)
+        # git can't delete paths over 260 characters on Windows ("Filename too long"), and
+        # pnpm's node_modules have them; a process that just stopped can hold files for a
+        # few seconds (WinError 32), so retry
+        for attempt in range(REMOVE_TRIES):
+            try:
+                rmtree_long(path)
+                break
+            except OSError as e:
+                if attempt + 1 < REMOVE_TRIES:
+                    time.sleep(REMOVE_WAIT)
+                    continue
+                print(f"worktrees: couldn't remove {path} after {REMOVE_TRIES} tries: {e}. Close whatever "
+                      "still has files open there, delete the folder, then run `git worktree prune`.",
+                      file=sys.stderr)
     git("worktree", "prune")
+    return not path.exists()
 
 
 def rmtree_long(path) -> None:

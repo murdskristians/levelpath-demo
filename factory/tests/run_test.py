@@ -387,6 +387,17 @@ check("merged: needs-human label removed",
 check("merged: dev server stopped", server.poll() is not None)
 check("merged: worktree removed", not Path(wt).exists(), wt)
 
+# ---- 11. the control room files a pasted intent under its own title ----
+loader = importlib.machinery.SourceFileLoader("factory_serve", str(SRC / "factory/bin/serve"))
+spec = importlib.util.spec_from_loader("factory_serve", loader)
+serve = importlib.util.module_from_spec(spec)
+loader.exec_module(serve)
+for line, want in [("# Intent: Edit a draft purchase request", "Edit a draft purchase request"),
+                   ("## intent:   Add a footer", "Add a footer"),
+                   ("Requesters can edit drafts", "Requesters can edit drafts"),
+                   ("# ", "#")]:
+    check(f"control room issue title from {line!r}", serve.issue_title(line) == want, serve.issue_title(line))
+
 os.chdir(BOX)
 print(f"\n{ok} passed, {fail} failed")
 sys.exit(1 if fail else 0)

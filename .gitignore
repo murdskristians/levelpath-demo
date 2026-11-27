@@ -23,10 +23,13 @@ __pycache__/
 .venv/
 
 # Tooling
-# graphify: the code graph lives only in the main checkout (Chris rebuilds it after a merge)
+# graphify: the code graph lives only in the main checkout (its git hooks rebuild it; see CLAUDE.md)
 graphify-out/
 .DS_Store
 Thumbs.db
 
 # The private project brief (kept out of the public repo; history rewritten 2026-11-17)
 KICKOFF.md
+
+# uv creates it next to the root pyproject.toml on every `uv run`; the ADW scripts pin their own deps
+uv.lock

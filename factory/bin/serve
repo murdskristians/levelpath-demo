@@ -287,12 +287,20 @@ def events_of(run_id, key, after):
 # ---- actions -----------------------------------------------------------------------
 
 
+def issue_title(line):
+    """An issue title from the prompt's first line: a pasted intent file starts with
+    `# Intent: <title>`, and the `#` and the `Intent:` don't belong in the title."""
+    title = re.sub(r"^\s*#+\s*", "", line)
+    title = re.sub(r"^intent\s*:\s*", "", title, flags=re.IGNORECASE).strip()
+    return title or line.strip()
+
+
 def start_run(prompt):
     """File the prompt as an issue and start a headless ADW run on it."""
     lines = [l for l in prompt.strip().splitlines() if l.strip()]
     if not lines:
         raise ValueError("Write what you want built.")
-    title = short(lines[0], 80)
+    title = short(issue_title(lines[0]), 80)
     res = subprocess.run(["gh", "issue", "create", "--title", title, "--body", prompt.strip()],
                          cwd=REPO, capture_output=True, text=True, encoding="utf-8")
     if res.returncode != 0:
