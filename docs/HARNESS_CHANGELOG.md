@@ -692,3 +692,17 @@ Format:
   - **Factory test:** a node parent with a listening child is stopped completely.
   - **Also:** `graphify update` is no longer pre-approved in `.claude/settings.json`. Agents must never run it, and the git hooks rebuild the graph.
 - **Why this prevents a repeat:** the thing that started a server is what gets stopped, so a run leaves neither memory nor folder handles behind.
+
+## 2026-11-27: The control room's Agents tab was broken for every factory job
+
+- **What went wrong:** opening a factory (L2) job's **Agents** tab failed: the server dropped the connection and the page showed nothing. ADW runs worked.
+  - **Why:** on 2026-11-25 `first_prompt()` in `factory/bin/job` started returning the prompt and its time, for the job's cost. `factory/bin/serve` still treated the result as text and raised `AttributeError`. Its request handler caught only the errors it expected, so the connection just closed, and no test covered the tab.
+  - **Also:** job ids are used again once a job's folder is deleted, and the tab would have mixed in the earlier job's agents.
+- **Before:** `first = cached(path, first_prompt_of)`, every agent whose prompt named the job's folder, and an unexpected error dropped the connection.
+- **After:**
+  - the tab unpacks the prompt and its time, and leaves out agents that started before the job, as the cost does;
+  - an unexpected error answers 500 with its message, and the traceback goes to the control room's terminal;
+  - feedback for an unknown run is refused with a 400 instead of a traceback;
+  - an ADW `approver-retry` agent shows as `approver`;
+  - three factory checks: the tab lists the job's agent and not an earlier job's with the same id, unknown-run feedback is refused, and a bug answers 500. Against the old code the first one fails with the same `AttributeError`.
+- **Why this prevents a repeat:** the tab is now tested, and a bug like this one shows up on the page with its error instead of as an empty tab.
