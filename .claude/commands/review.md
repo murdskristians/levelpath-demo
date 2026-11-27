@@ -15,11 +15,14 @@ slug: $1
 
 ## Steps
 
-1. Use the round folder of the last `/verify <slug>` run when its
-   `checks.md` has `COMMIT:` equal to what `factory/bin/gate --tree <repo>`
-   prints now (the commit plus a hash of the uncommitted changes, so an edit
-   since `/verify` counts as new code). Otherwise run the gate for the next
-   round as in `/verify` steps 2 and 3. Reviewers start only on a passing gate.
+1. `/verify <slug>` comes first. Use the round folder of the last `/verify`
+   run when it has `review-verify.md` and its `checks.md` has `COMMIT:` equal
+   to what `factory/bin/gate --tree <repo>` prints now (the commit plus a
+   hash of the uncommitted changes, so an edit since `/verify` counts as new
+   code). Otherwise **stop**: tell Chris to run `/verify <slug>` first, and
+   why (no verify round, or the code changed since it). Don't run the gate or
+   any reviewer yourself. In the factory and the ADWs the verifier always
+   runs in the same round, and the approver needs its review.
 2. Read the reviewers from `agents/<slug>/agents.json` `reviewers` (written by
    `/spec`): every key except `verify` (the verifier ran in `/verify`), with
    its model. Without `agents.json`, use `bugs`, `spec` and `security` with
@@ -37,8 +40,7 @@ slug: $1
    missing and it must write it now with the Write tool, from the review it
    already did, without reviewing again. If it is still missing, tell Chris.
    Never write a review file yourself, not even from the reviewer's reply.
-4. Read every review in the round (and `review-verify.md` if `/verify` ran
-   this round).
+4. Read every review in the round, `review-verify.md` included.
 5. Merge their findings:
    - Important first, then Nits.
    - Combine findings that point at the same line and problem, naming every
