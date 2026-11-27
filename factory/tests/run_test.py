@@ -473,6 +473,25 @@ try:
 except ValueError as e:
     check("feedback for an unknown run is refused", "No such run" in str(e), str(e))
 
+# ---- 11c. the Agents tab tells a hook's "no" and a non-zero exit apart from a real error ----
+# The texts are what Claude Code wrote in run 78d872a3's planner and builder logs.
+hook_cmd = 'python3 -X utf8 "$CLAUDE_PROJECT_DIR/.claude/hooks/{}.py"'
+cases = [
+    (f"PreToolUse:Bash hook error: [{hook_cmd.format('graph_first')}]: graph_first: this repo has a code graph.",
+     True, "blocked", "graph_first", "graph_first: this repo has a code graph."),
+    (f"PreToolUse:Bash hook error: [{hook_cmd.format('guard')}]: BLOCKED by .claude/hooks/guard.py: merging is for Chris",
+     True, "blocked", "guard", "guard: merging is for Chris"),
+    ("Exit code 2\n.:\nindex.html\npackage.json", True, "exit", "exit 2", ".:\nindex.html\npackage.json"),
+    ("Exit code 1", True, "error", None, "Exit code 1"),
+    ("Exit code 1\n   \n", True, "error", None, "Exit code 1"),
+    ("File does not exist.", True, "error", None, "File does not exist."),
+    ("Exit code 2\nlooks like an exit", False, "result", None, "Exit code 2 looks like an exit"),
+]
+for text, is_error, kind, name, shown in cases:
+    ev = serve.result_event("t", text, is_error)
+    check(f"Agents tab: {shown.splitlines()[0][:40]!r} ({'error' if is_error else 'ok'}) shows as {kind}",
+          ev["kind"] == kind and ev.get("name") == name and ev["text"] == serve.short(shown, 400), ev)
+
 import http.client  # noqa: E402  (not urllib: with SSLKEYLOGFILE set it loads OpenSSL, which crashes on Windows)
 import threading  # noqa: E402
 

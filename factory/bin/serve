@@ -163,6 +163,27 @@ def tool_detail(name, inp):
     return short(json.dumps(inp)[:300])
 
 
+HOOK_BLOCK = re.compile(r"\w+(?::\w+)? hook error: \[(.*?)\]: (.*)", re.S)
+EXIT_WITH_OUTPUT = re.compile(r"Exit code (\d+)\n(.*\S.*)", re.S)
+
+
+def result_event(ts, text, is_error):
+    """One tool result. Claude Code marks two ordinary things as errors, and the page
+    showed them in red: a hook saying no (an agent tried something a rule forbids, and
+    learned why), and a command that ran and printed its output but exited non-zero.
+    They get their own kinds, so red stays for real failures."""
+    if not is_error:
+        return {"t": ts, "kind": "result", "text": short(text, 400)}
+    if m := HOOK_BLOCK.match(text):
+        scripts = re.findall(r"(\w+)\.py", m.group(1))
+        hook = scripts[-1] if scripts else short(m.group(1), 40)
+        why = re.sub(rf"^(BLOCKED by \S+: |{re.escape(hook)}: )", "", m.group(2).strip())
+        return {"t": ts, "kind": "blocked", "name": hook, "text": short(f"{hook}: {why}", 400)}
+    if m := EXIT_WITH_OUTPUT.match(text):
+        return {"t": ts, "kind": "exit", "name": f"exit {m.group(1)}", "text": short(m.group(2), 400)}
+    return {"t": ts, "kind": "error", "text": short(text, 400)}
+
+
 def parse_events(path):
     """A transcript or stream-json log as a list of events the page can show."""
     events, model, cost, done = [], None, None, False
@@ -192,8 +213,7 @@ def parse_events(path):
                         c = b.get("content")
                         text = c if isinstance(c, str) else " ".join(
                             x.get("text", "") for x in (c or []) if isinstance(x, dict))
-                        events.append({"t": ts, "kind": "error" if b.get("is_error") else "result",
-                                       "text": short(text, 400)})
+                        events.append(result_event(ts, text, b.get("is_error")))
             elif kind == "user" and isinstance(msg.get("content"), str) and not events:
                 events.append({"t": ts, "kind": "prompt", "text": short(msg["content"], 1200)})
             elif kind == "result":
