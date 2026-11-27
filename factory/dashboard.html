@@ -396,6 +396,14 @@ async function fetchText(url) {
   return res.text()
 }
 
+// The control room's API: on an error, the server's own message (it says what broke).
+async function fetchJson(url) {
+  const res = await fetch(url, { cache: 'no-store' })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(data.error || `${url}: HTTP ${res.status}`)
+  return data
+}
+
 async function fetchFirst(url) {
   try { return (await fetchText(url)).split('\n')[0].trim() } catch { return null }
 }
@@ -647,7 +655,7 @@ async function openDrawer(id, tab = 'files') {
   try {
     await refreshDrawer()
   } catch (err) {
-    $('d-doc').innerHTML = `<p class="note">${esc(err.message)}</p>`
+    $(drawerTab === 'agents' ? 'a-events' : 'd-doc').innerHTML = `<p class="note">${esc(err.message)}</p>`
   }
 }
 
@@ -722,7 +730,7 @@ async function refreshAgents(job) {
   $('d-num').textContent = `${job.id} · ${job.stage}${job.round ? ` · round ${job.round}` : ''} · $${jobCost(job).toFixed(2)} · ${elapsed(job)}`
   $('d-title').textContent = job.title
   $('d-links').innerHTML = links(job)
-  const data = await (await fetch(`api/agents?run=${encodeURIComponent(job.id)}`, { cache: 'no-store' })).json()
+  const data = await fetchJson(`api/agents?run=${encodeURIComponent(job.id)}`)
   const items = [
     { key: 'orchestrator', role: 'orchestrator', running: LIVE.has(job.stage),
       sub: `${job.driver === 'adw' ? 'ADW pipeline' : 'your /factory session'} · ${data.orchestrator} ev` },
@@ -739,7 +747,7 @@ async function refreshAgents(job) {
   const box = $('a-events')
   if (agentsState.key !== key) { agentsState.key = key; agentsState.count = 0; box.innerHTML = '' }
   const url = `api/events?run=${encodeURIComponent(job.id)}&agent=${encodeURIComponent(agentsState.selected)}&after=${agentsState.count}`
-  const fresh = (await (await fetch(url, { cache: 'no-store' })).json()).events
+  const fresh = (await fetchJson(url)).events
   if (fresh.length) {
     if (!agentsState.count) box.innerHTML = ''
     const atEnd = box.scrollHeight - box.scrollTop - box.clientHeight < 60

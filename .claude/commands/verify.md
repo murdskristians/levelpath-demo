@@ -32,7 +32,7 @@ slug: $1
 
    ```
    Job: <slug>. Job folder: <repo>/agents/<slug>/. Main checkout: <repo>. Worktree: <repo>. Branch: <current branch>. Base: origin/main. Issue: none.
-   Review round <N>. Ports: API 5090, web 5091.
+   Review round <N>. Ports: API 5090, web 5091. Write your review to <repo>/agents/<slug>/round-<N>/review-verify.md.
    ```
 
 5. Read `agents/<slug>/round-<N>/review-verify.md`. If it is missing, resume

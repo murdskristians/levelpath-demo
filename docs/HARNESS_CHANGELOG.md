@@ -706,3 +706,56 @@ Format:
   - an ADW `approver-retry` agent shows as `approver`;
   - three factory checks: the tab lists the job's agent and not an earlier job's with the same id, unknown-run feedback is refused, and a bug answers 500. Against the old code the first one fails with the same `AttributeError`.
 - **Why this prevents a repeat:** the tab is now tested, and a bug like this one shows up on the page with its error instead of as an empty tab.
+
+## 2026-11-27: Pre-rehearsal sweep: seven problems on the L3 path
+
+- **What went wrong:** each earlier review read the code and found new bugs, because reading doesn't show what only running shows. This sweep went through every file an L3 run executes, from the control room's Start run box to cleanup, and ran the risky parts.
+- **Found, before → after:**
+  1. **An ADW run could crash partway.**
+     - Before: `ADWState.save()` replaced `adw_state.json` once. On Windows a replace fails while any reader has the file open, and the control room reads it every 2 s: a stress test failed 1,452 of 3,000 saves. The parallel reviewers' cost saves also shared one temporary file, and could overwrite each other's costs.
+     - After: up to 50 tries, 0.1 s apart (as `factory/bin/job` already did), under one lock, which `add_cost` also holds.
+  2. **A crashed run looked like it was still running.**
+     - Before: any unexpected error, such as a failed `gh` call, ended the run silently, and its card stayed in a running column for good.
+     - After: `pipeline.on_crash` logs the traceback, writes an ESCALATE `decision.md` with the error and hands the run over. If GitHub is what failed, it still sets the stage to needs-human. The error is then raised again, so the script exits non-zero.
+  3. **The run's web app could reach the wrong API.**
+     - Before: the builder, the verifier and `CLAUDE.md` started the web app without `API_PORT`, so its proxy reached port 3000 (the main checkout's API) instead of the run's own. The last verifier happened to add it.
+     - After: all three say `API_PORT=<a> pnpm --filter @levelpath/web dev …`.
+  4. **The guard let pushes to `main` through.**
+     - Before: `git push origin HEAD`, `git push origin @`, `git -C <repo> push` and `git -C <repo> merge` were allowed on `main`. GitHub doesn't stop them either: branch protection exempts admins, and the agents push as Chris.
+     - After: the guard parses `git [options] <subcommand>`, uses `-C`'s folder, reads `HEAD` and `@` as the current branch, and blocks `--all` and `--mirror`.
+  5. **The `adw` trigger missed commands and could stop.**
+     - Before: it ignored the first comment on an issue that had no comments when it first looked, which is the normal way to start a run (create an issue, comment `adw`). One failed `gh` call also stopped it.
+     - After: a comment counts as history only when it is older than the trigger's start. A failed call skips that poll and says so.
+  6. **L1 reviewers read only committed changes.**
+     - Before: the reviewers and the approver read `git diff <base>...HEAD`, which is empty in a pair run, where nothing is committed.
+     - After: `git diff $(git merge-base <base> HEAD)` and `git status --short`: committed or not, plus new files.
+  7. **Small ones in the control room.**
+     - The Agents tab now shows the server's error message, not a browser `TypeError`.
+     - The board no longer fails a poll when a run's temporary state file disappears while it reads the folder.
+     - A retried reviewer gets its own log, so the retry no longer overwrites the first attempt's.
+- **Tests:**
+  - 9 new pipeline cases (15 in all): saves with a reader holding the file, parallel costs, the crash hand-over (also with GitHub down), and the trigger. The old `state.py` and `trigger_cron.py` fail 4 of them.
+  - 12 new guard checks (115 in all). The old guard fails 6 of them.
+- **Why this prevents a repeat:** each fix has a test that reproduces the problem on the old code.
+
+## 2026-11-27: The rehearsal: a review written beside its round folder cost a round
+
+- **What went wrong:** in the L3 rehearsal (run `febdcacc`, the theme toggle), the spec reviewer passed round 1 but wrote `agents/febdcacc/review-spec.md` instead of `agents/febdcacc/round-1/review-spec.md`. It did it again on the retry, because the retry used the same prompt.
+  - The pipeline found no review, counted it `invalid`, and ran a whole extra round: about $0.40 and 15 minutes.
+  - The role gave the full path once, at the top. Its "Write review-spec.md" section named only the file.
+  - **Also seen:** the gate runs for about 6 minutes with no agent, so the Agents tab showed nothing new and the run looked stuck.
+- **Before:** a role's file path lived in its instructions alone, and nothing checked where an agent wrote.
+- **After:** three layers, for every role and every driver:
+  - **The prompt names the file.** The ADW pipeline, the factory skill, `/review` and `/verify` say `Write your review to <job folder>/round-<N>/review-<r>.md`. The pipeline's retries (planner, reviewers, approver, builder) name the exact missing path.
+  - **Every role's "Write …" section gives the full path** and says that a file anywhere else is never read.
+  - **The guard enforces it.** In a job folder, an agent may write only the contract's files: `intake.md`, `scout.md`, `spec.md`, `plan.md`, `build.md`, `decision.md` and `round-<N>/review-<verify|bugs|spec|security>.md`. Two exceptions: the verifier's `round-<N>/shots/*.png`, and `issue.md` and `agents.json`, which `/spec` writes. Those file names are blocked anywhere else, except in `.claude/` and `docs/templates/`, which hold the roles and templates of the same names. The scripts' own files, such as `job.json`, `adw_state.json` and `checks.md`, can't be written by an agent either.
+  - The pipeline logs `→ gate: … about 6 minutes` when the gate starts, so the orchestrator view shows it.
+- **What held up from the same day's fixes:**
+  - the builder started the web app with its own `API_PORT`;
+  - three reviewers saving in parallel caused no crash;
+  - the retry got its own log;
+  - no servers were left behind;
+  - cleanup removed the worktree without WinError 32.
+  - The run ended READY after 2 rounds, for $1.81. The light theme matched `main` exactly when compared rule by rule (31 rules). PR #59 was closed unmerged, as a demo task.
+- **Tests:** 26 new guard checks (the misplaced review among them), and a pipeline test where the first review lands beside the round folder and the retry is told the exact path.
+- **Why this prevents a repeat:** the agent learns the path from its prompt and its role, and if it still gets it wrong, the guard stops the write and tells it the right path, before a round is lost.

@@ -28,6 +28,7 @@ import signal
 import subprocess
 import sys
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, Optional
 
@@ -47,6 +48,7 @@ ADWS = Path(__file__).resolve().parents[1]
 REPO_PATH = gh.repo()
 OPERATOR = gh.operator()
 
+STARTED = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")  # gh's createdAt format
 seen: Dict[int, Optional[str]] = {}  # issue → id of the last comment looked at
 shutdown = False
 
@@ -65,10 +67,11 @@ def command_for(issue_number: int) -> Optional[list]:
     latest = comments[-1]
     if seen.get(issue_number) == latest["id"]:
         return None
-    first_time = issue_number not in seen
     seen[issue_number] = latest["id"]
-    if first_time:
-        return None  # existing comments are history, not commands
+    # Comments from before the trigger started are history, not commands. By time, not
+    # by "first seen": an issue's first comment, or a new issue's, is a command too.
+    if latest.get("createdAt", "") < STARTED:
+        return None
     body = (latest.get("body") or "").strip()
     if gh.MARKER in body or latest.get("author", {}).get("login") != OPERATOR:
         return None
@@ -89,10 +92,20 @@ def command_for(issue_number: int) -> Optional[list]:
 
 
 def poll():
-    for number in gh.open_issues():
+    # A failed GitHub call skips this poll (or this issue) and says so; it never stops the trigger.
+    try:
+        numbers = gh.open_issues()
+    except RuntimeError as e:
+        print(f"WARNING: can't list the open issues ({e}); trying again in {POLL_SECONDS}s")
+        return
+    for number in numbers:
         if shutdown:
             return
-        cmd = command_for(number)
+        try:
+            cmd = command_for(number)
+        except (RuntimeError, ValueError, KeyError) as e:
+            print(f"WARNING: #{number}: can't read its comments ({e}); trying again next poll")
+            continue
         if not cmd:
             continue
         print(f"INFO: #{number}: running {' '.join(cmd[:3])}")
@@ -105,7 +118,7 @@ def main():
     signal.signal(signal.SIGINT, on_signal)
     signal.signal(signal.SIGTERM, on_signal)
     print(f"INFO: watching {REPO_PATH} every {POLL_SECONDS}s for `adw` / `adw patch` comments by @{OPERATOR}")
-    poll()  # the first poll only records what already exists
+    poll()
     schedule.every(POLL_SECONDS).seconds.do(poll)
     while not shutdown:
         schedule.run_pending()

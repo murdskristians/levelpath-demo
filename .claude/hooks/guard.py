@@ -17,6 +17,8 @@ It blocks:
   5. the test lock: in a bug task, edits to test files that exist on the base
      branch (new regression tests are fine)
   6. edits to the harness's protected paths from inside an agent's worktree
+  7. a run file written where nothing reads it: in a job folder only the contract's
+     files (a review only in its round folder), and those names nowhere else
 
 Stdlib only, so it starts fast: one process per tool call.
 """
@@ -199,31 +201,60 @@ def segments(cmd):
     return [s.strip() for s in re.split(r"&&|\|\||;|\|", cmd) if s.strip()]
 
 
+def git_command(seg):
+    """(directory from -C or None, subcommand, its arguments) for `git [options] <sub> …`,
+    else None. Options before the subcommand don't hide it: `git -C <dir> push`."""
+    words = seg.split()
+    for g, word in enumerate(words):
+        if word.strip("\"'").replace("\\", "/").rsplit("/", 1)[-1].lower() not in {"git", "git.exe"}:
+            continue
+        i, where = g + 1, None
+        while i < len(words) and words[i].startswith("-"):
+            if words[i] in ("-C", "-c") and i + 1 < len(words):
+                if words[i] == "-C":
+                    where = words[i + 1].strip("\"'")
+                i += 2
+            else:
+                i += 1
+        if i < len(words):
+            return where, words[i], words[i + 1:]
+    return None
+
+
 def check_merge(tool, inp, cwd):
     if tool not in SHELL_TOOLS:
         return
     cmd = inp.get("command", "")
     where = command_dir(cmd, cwd)
     for seg in segments(cmd):
-        words = seg.split()
         if re.search(r"\bgh\s+pr\s+merge\b", seg):
             block("agents never merge PRs (D9). Chris reviews and merges every PR on GitHub.")
         if re.search(r"\bgh\s+api\b", seg) and re.search(r"/merges?\b", seg):
             block("merging through the GitHub API is a merge too (D9). Chris merges.")
         if re.search(r"\bgh\s+pr\s+review\b", seg) and re.search(r"(\s--approve\b|\s-a\b)", seg):
             block("agents never approve PRs (D9): an agent can't approve its own work.")
-        if re.search(r"\bgit\s+push\b", seg):
+        git = git_command(seg)
+        if not git:
+            continue
+        sub_dir, sub, args = git
+        here = os.path.join(where, sub_dir) if sub_dir else where
+        if sub == "push":
+            # GitHub doesn't stop this: branch protection exempts admins, and the agents act as Chris.
             if re.search(r"\s(--force|-f|--force-with-lease)(=\S+)?(\s|$)", seg) or re.search(r"\s\+\S+", seg):
                 block("force-pushing is not allowed.")
-            refs = [w for w in words[words.index("push") + 1:] if not w.startswith("-")] if "push" in words else []
+            if {"--all", "--mirror"} & set(args):
+                block("pushing every branch would push main too (D9). Push your own branch.")
+            current = git_out(here, "rev-parse", "--abbrev-ref", "HEAD")
+            refs = [a for a in args if not a.startswith("-")]
             targets = {r.split(":")[-1].replace("refs/heads/", "") for r in refs[1:]}
+            targets = {current if t in {"HEAD", "@", ""} else t for t in targets}  # HEAD is the current branch
             if targets & BASE_BRANCHES:
                 block("pushing to main is not allowed (D9). Push your own branch; Chris merges the PR.")
-            if not refs[1:] and git_out(where, "rev-parse", "--abbrev-ref", "HEAD") in BASE_BRANCHES:
+            if not refs[1:] and current in BASE_BRANCHES:
                 block("this would push main (the current branch). Push a job branch instead.")
         # `git merge` itself, not `git merge-base` or `git merge-tree` (read-only)
-        if re.search(r"\bgit\s+merge(?![-\w])", seg) and "--abort" not in seg:
-            if git_out(where, "rev-parse", "--abbrev-ref", "HEAD") in BASE_BRANCHES:
+        if sub == "merge" and "--abort" not in args:
+            if git_out(here, "rev-parse", "--abbrev-ref", "HEAD") in BASE_BRANCHES:
                 block("merging into main is not allowed (D9). Merges happen on GitHub, by Chris.")
 
 
@@ -258,6 +289,44 @@ def check_edits(tool, inp, cwd):
                       "Agents can't change it from a worktree; write STATUS: BLOCKED instead.")
 
 
+# ---- 7. run files only where the run contract puts them ------------------------------
+
+# The files a role writes into a job folder (agents/<id>/ or factory/jobs/<id>/), by path
+# inside it. Everything else there is written by the scripts (issue.md and agents.json come
+# from /spec in L1), and a file anywhere else is never read: a review written beside its round folder
+# instead of in it once cost a run a whole extra round.
+RUN_FILE = re.compile(r"^((issue|intake|scout|spec|plan|build|decision)\.md|agents\.json"
+                      r"|round-\d+/review-(verify|bugs|spec|security)\.md"
+                      r"|round-\d+/shots/[^/]+\.png)$")
+RUN_FILE_NAME = re.compile(r"^(intake|scout|spec|plan|build|decision|review-(verify|bugs|spec|security))\.md$")
+JOB_FOLDER = re.compile(r"^(.+?)/(agents|factory/jobs)/([^/]+)/(.+)$")
+SAME_NAME_ELSEWHERE = (".claude/", "docs/templates/")  # the roles, commands and templates
+
+
+def check_run_files(tool, inp, cwd):
+    if tool not in EDIT_TOOLS:
+        return
+    path = inp.get("file_path") or inp.get("notebook_path")
+    if not path:
+        return
+    p = norm(path)
+    if not re.match(r"^([a-zA-Z]:)?/", p):
+        p = norm(Path(cwd) / p)
+    m = JOB_FOLDER.match(p)
+    if m and (Path(m.group(1)) / ".git").is_dir():  # under the main checkout, not a worktree
+        folder, rel = f"{m.group(1)}/{m.group(2)}/{m.group(3)}", m.group(4)
+        if not RUN_FILE.match(rel):
+            block(f"{rel} is not a file of the run contract in {folder}/. A role writes only its own "
+                  "file: intake.md, scout.md, spec.md, plan.md, build.md or decision.md in the job folder, "
+                  "and a review as round-<N>/review-<verify|bugs|spec|security>.md in the round folder "
+                  "your prompt names. Write it at that exact path.")
+        return
+    name = p.rsplit("/", 1)[-1]
+    if RUN_FILE_NAME.match(name) and not any(f"/{d}" in p for d in SAME_NAME_ELSEWHERE):
+        block(f"{name} is a run file, and nothing reads it here ({p}). Write it in the job folder your "
+              "prompt names (Job folder: …), reviews in its round-<N>/ folder.")
+
+
 def main():
     event = json.load(sys.stdin)
     tool = event.get("tool_name", "")
@@ -267,6 +336,7 @@ def main():
     check_rm(tool, inp)
     check_merge(tool, inp, cwd)
     check_edits(tool, inp, cwd)
+    check_run_files(tool, inp, cwd)
     sys.exit(0)
 
 

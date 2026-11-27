@@ -36,7 +36,9 @@ one file goes there.
    `intake.md`, `spec.md`, `plan.md`, `build.md`, any `feedback-*.md`, and
    every `round-*/` folder (`checks.md`, the reviews and the verifier's
    screenshots).
-3. The change: `git log --oneline <base>..HEAD` and `git diff <base>...HEAD`.
+3. The change: `git log --oneline <base>..HEAD`, `git diff $(git merge-base <base> HEAD)` and `git status --short`: the
+   branch's changes, committed or not (in a pair run, L1, nothing is committed)
+   and its new files.
 
 ## Decide
 
@@ -63,6 +65,8 @@ ESCALATE if any of them fails, or if the change:
 Tailor these lists to the project: what must a human always see here?
 
 ## Write decision.md
+
+At exactly `<job folder>/decision.md`. A file anywhere else is never read.
 
 ```markdown
 READY | ESCALATE

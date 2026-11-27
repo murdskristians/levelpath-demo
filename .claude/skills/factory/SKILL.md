@@ -153,8 +153,9 @@ gate's `round-<N-1>/checks.md`, the reviews in `round-<N-1>/`, or
 **review.** Spawn every reviewer in `job.json` `agents.reviewers` **in one
 message**, so they run in parallel: `subagent_type` `verifier` for `verify`
 and `reviewer-<r>` for the rest, model from the same map, prompt
-`<header> Review round <N>.` plus `Ports: API <a>, web <w>.` for the
-verifier. **WAIT FOR ALL.** Each time one finishes, run
+`<header> Review round <N>. Write your review to <job folder>/round-<N>/review-<r>.md.`
+(the full path, with the job folder's path filled in) plus
+`Ports: API <a>, web <w>.` for the verifier. **WAIT FOR ALL.** Each time one finishes, run
 `factory/bin/job sync <id>` so the dashboard fills in. When every reviewer has
 finished:
 

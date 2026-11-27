@@ -17,6 +17,7 @@ import os
 import subprocess
 import sys
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Dict, Optional, Tuple
 
@@ -47,10 +48,11 @@ def folder(state: ADWState) -> Path:
 
 
 def add_cost(state: ADWState, key: str, usd: float) -> None:
-    costs = dict(state.get("costs") or {})
-    costs[key] = round(costs.get(key, 0.0) + usd, 4)
-    state.update(costs=costs)
-    state.save()
+    with ADWState.lock:  # parallel reviewers: without it one's cost can overwrite another's
+        costs = dict(state.get("costs") or {})
+        costs[key] = round(costs.get(key, 0.0) + usd, 4)
+        state.update(costs=costs)
+        state.save()
 
 
 def role(state: ADWState, logger, name: str, prompt: str, model: Optional[str] = None,
@@ -131,11 +133,13 @@ def plan(state: ADWState, logger) -> None:
 
     if state.get("risk") == "high":
         role(state, logger, "scout", roles.header(state))
+    prompt = roles.header(state)
     for attempt in range(2):
-        role(state, logger, "planner", roles.header(state), model=model,
-             tag="planner" if not attempt else "planner-retry")
+        role(state, logger, "planner", prompt, model=model, tag="planner" if not attempt else "planner-retry")
         if (d / "spec.md").exists() and (d / "plan.md").exists():
             break
+        prompt += (f"\n{d.as_posix()}/spec.md or {d.as_posix()}/plan.md is missing. Write both now, at exactly "
+                   "those paths, with the Write tool. Your reply is not read: only the files count.")
     else:
         raise Stop("the planner didn't write spec.md and plan.md")
     title = roles.first_line(d / "spec.md").lstrip("# ").strip()
@@ -165,7 +169,7 @@ def build(state: ADWState, logger, reason: str) -> bool:
             return True
         logger.warning(f"build round {n} isn't ready: {problem}")
         prompt = f"{roles.header(state)}\nBuild round {n}. {roles.ports_line(state)}\n" \
-                 f"Your build isn't ready: {problem}. Fix that, then update build.md."
+                 f"Your build isn't ready: {problem}. Fix that, then update {d.as_posix()}/build.md."
     escalate(state, logger, f"Build round {n} never reached a pushed, clean READY state.")
     return False
 
@@ -192,6 +196,8 @@ def gate(state: ADWState, logger) -> bool:
     state.update(stage="gate")
     state.save("gate")
     rd = roles.round_dir(state.get("adw_id"), n)
+    # No agent runs during the gate, so say so: otherwise the run looks stuck for minutes.
+    logger.info(f"→ gate: factory/checks.sh on round {n} (install, build, lint, tests: about 6 minutes)")
     res = subprocess.run([sys.executable, "-X", "utf8", str(roles.REPO / "factory" / "bin" / "gate"),
                           "--run", state.get("worktree_path"), str(rd)],
                          capture_output=True, text=True, encoding="utf-8")
@@ -209,10 +215,15 @@ def review(state: ADWState, logger) -> Dict[str, str]:
     rd = roles.round_dir(state.get("adw_id"), n)
     reviewers: Dict[str, str] = state.get("agents", {}).get("reviewers", {})
 
-    def one(key: str, model: str) -> None:
+    def one(key: str, model: str, retry: bool = False) -> None:
         extra = f" {roles.ports_line(state)}" if key == "verify" else ""
-        role(state, logger, roles.reviewer_agent(key), f"{roles.header(state)}\nReview round {n}.{extra}",
-             model=model, tag=f"review-{key}-r{n}")
+        target = (rd / f"review-{key}.md").as_posix()
+        prompt = f"{roles.header(state)}\nReview round {n}.{extra} Write your review to {target}."
+        if retry:
+            prompt += (f"\n{target} is missing or doesn't start with a VERDICT line. Write it now, at exactly "
+                       f"that path, with the Write tool. Your reply is not read: only the file counts.")
+        role(state, logger, roles.reviewer_agent(key), prompt,
+             model=model, tag=f"review-{key}-r{n}" + ("-retry" if retry else ""))  # its own log
 
     with ThreadPoolExecutor(max_workers=len(reviewers) or 1) as pool:  # WAIT FOR ALL
         list(pool.map(lambda kv: one(*kv), reviewers.items()))
@@ -220,7 +231,7 @@ def review(state: ADWState, logger) -> Dict[str, str]:
     for key, model in reviewers.items():
         line = roles.first_line(rd / f"review-{key}.md") or ""
         if line not in ("VERDICT: PASS", "VERDICT: CHANGES"):
-            one(key, model)  # once more: no file, or no verdict line
+            one(key, model, retry=True)  # once more: no file, or no verdict line
             line = roles.first_line(rd / f"review-{key}.md") or ""
         verdicts[key] = line.removeprefix("VERDICT: ") if line.startswith("VERDICT: ") else "invalid"
     logger.info(f"round {n} verdicts: {verdicts}")
@@ -282,8 +293,9 @@ def approve(state: ADWState, logger) -> None:
             return
         # Seen twice: the decision was in the reply but never written. Only the file counts.
         logger.warning("the approver didn't write decision.md; running it once more")
-        prompt += ("\ndecision.md is missing or doesn't start with READY or ESCALATE. Write it now with "
-                   "the Write tool, in the format your role gives. Your reply is not read: only the file counts.")
+        prompt += (f"\n{d.as_posix()}/decision.md is missing or doesn't start with READY or ESCALATE. Write it now, "
+                   "at exactly that path, with the Write tool, in the format your role gives. Your reply is not "
+                   "read: only the file counts.")
     escalate(state, logger, "The approver didn't write a READY or ESCALATE decision, twice.")
 
 
@@ -369,13 +381,42 @@ def screenshots(state: ADWState, n: int) -> list:
 # ---- entry points the phase scripts call -----------------------------------------------
 
 
+@contextmanager
+def on_crash(state: ADWState, logger):
+    """An unexpected error (a GitHub call that failed, a bug) ends the run at
+    needs-human with the error in decision.md, then is raised again. Without this the
+    run's last stage stays a running one, and the board shows it running for good."""
+    try:
+        yield
+    except Stop:
+        raise
+    except Exception as e:
+        stage = state.get("stage")
+        logger.exception(f"the run crashed at stage {stage}: {type(e).__name__}: {e}")
+        why = (f"The run crashed at stage {stage}: `{type(e).__name__}: {str(e)[:300]}`. The traceback is in "
+               f"`agents/{state.get('adw_id')}/<script>/execution.log`. Nothing was merged.")
+        try:
+            escalate(state, logger, why)
+        except Exception as again:  # GitHub may be what failed: the board still has to show it
+            logger.exception(f"couldn't post the crash on GitHub: {type(again).__name__}: {again}")
+            state.update(stage="needs-human")
+            state.save("crashed")
+        raise
+
+
 def sdlc(state: ADWState, logger) -> None:
-    plan(state, logger)
-    run_rounds(state, logger, "This is round 1: implement spec.md following plan.md.")
+    with on_crash(state, logger):
+        plan(state, logger)
+        run_rounds(state, logger, "This is round 1: implement spec.md following plan.md.")
 
 
 def patch(state: ADWState, logger, feedback: str) -> None:
     """Your feedback on a run that is waiting for you: another set of rounds."""
+    with on_crash(state, logger):
+        _patch(state, logger, feedback)
+
+
+def _patch(state: ADWState, logger, feedback: str) -> None:
     d = folder(state)
     k = len(list(d.glob("feedback-*.md"))) + 1
     (d / f"feedback-{k}.md").write_text(f"# Feedback {k}\n\nFrom @{gh.operator()} on the issue.\n\n"

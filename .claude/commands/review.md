@@ -31,7 +31,7 @@ slug: $1
 
    ```
    Job: <slug>. Job folder: <repo>/agents/<slug>/. Main checkout: <repo>. Worktree: <repo>. Branch: <current branch>. Base: origin/main. Issue: none.
-   Review round <N>.
+   Review round <N>. Write your review to <repo>/agents/<slug>/round-<N>/review-<key>.md.
    ```
 
    **Wait for all of them.**

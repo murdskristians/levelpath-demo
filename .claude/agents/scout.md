@@ -23,6 +23,8 @@ file, and you never suggest code: the planner decides how.
 
 ## Write scout.md
 
+At exactly `<job folder>/scout.md`. A file anywhere else is never read.
+
 ```markdown
 SCOUT: <one line: what the change touches>
 
