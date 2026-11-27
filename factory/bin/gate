@@ -187,6 +187,27 @@ def run_gate(worktree, round_dir, label):
     sys.exit(0 if verdict == "PASS" else 1)
 
 
+def first_prompt(f):
+    """The first user prompt in a transcript. A subagent's file (L2) starts with it; a
+    headless `claude -p --agent` session's (L3) starts with setup entries (agent-setting,
+    session-owner, queue-operation). Reading only line 1 found no job there, so the L3
+    builder's checks were silently skipped."""
+    for _ in range(30):
+        line = f.readline()
+        if not line:
+            break
+        try:
+            entry = json.loads(line)
+        except ValueError:
+            continue
+        message = entry.get("message")
+        if isinstance(message, dict) and entry.get("type", "user") == "user":
+            content = message.get("content", "")
+            return content if isinstance(content, str) else " ".join(
+                b.get("text", "") for b in content if isinstance(b, dict))
+    return ""
+
+
 def hook():
     event = json.load(sys.stdin)
     if event.get("stop_hook_active"):
@@ -196,10 +217,8 @@ def hook():
     transcript = event.get("agent_transcript_path") or event.get("transcript_path")
     if not transcript:
         sys.exit(0)
-    with open(Path(transcript).expanduser(), encoding="utf-8") as f:
-        first = json.loads(f.readline())
-    content = (first.get("message") or {}).get("content", "")
-    prompt = content if isinstance(content, str) else " ".join(b.get("text", "") for b in content)
+    with open(Path(transcript).expanduser(), encoding="utf-8", errors="replace") as f:
+        prompt = first_prompt(f)
     job_id = prompt.split("Job: ", 1)[1].split(".", 1)[0] if "Job: " in prompt else ""
     job_file = FACTORY / "jobs" / job_id / "job.json"
     if job_id and job_file.exists():

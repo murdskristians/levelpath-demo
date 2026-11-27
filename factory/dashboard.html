@@ -373,7 +373,7 @@ const COLUMNS = [
   { label: 'Review', who: 'routed reviewers', stages: ['review'] },
   { label: 'Approve', who: 'approver · recommends', stages: ['approve'] },
   { label: 'Needs human', who: 'you', stages: ['needs-human'], cls: 'human' },
-  { label: 'Done', who: 'merged · rejected', stages: ['merged', 'rejected'], cls: 'merged-col' },
+  { label: 'Done', who: 'merged · closed · rejected', stages: ['merged', 'closed', 'rejected'], cls: 'merged-col' },
 ]
 const STAGES = new Set(COLUMNS.flatMap((c) => c.stages))
 const LIVE = new Set(['intake', 'spec', 'build', 'gate', 'review', 'approve'])
@@ -473,11 +473,12 @@ function links(job) {
 function card(job, rounds) {
   const live = LIVE.has(job.stage)
   const human = job.stage === 'needs-human'
-  const done = job.stage === 'merged' || job.stage === 'rejected'
+  const done = ['merged', 'closed', 'rejected'].includes(job.stage)
   const [num, ...slug] = job.id.split('-')
   const flag = human ? '<span class="flag">your call</span>'
     : job.stage === 'needs-info' ? '<span class="flag wait">asked author</span>'
-    : job.stage === 'rejected' ? '<span class="flag wait">rejected</span>' : ''
+    : job.stage === 'rejected' ? '<span class="flag wait">rejected</span>'
+    : job.stage === 'closed' ? '<span class="flag wait">closed, not merged</span>' : ''
   const risk = job.intake?.risk
   const meta = [
     risk ? `<span class="risk-${esc(risk)}">${esc(risk)}</span>` : '',

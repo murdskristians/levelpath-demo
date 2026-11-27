@@ -218,6 +218,20 @@ check("hook passes when checks pass", r.returncode == 0, f"rc={r.returncode} {r.
 r = subprocess.run([BASH, "-c", hook_cmd], input=event, capture_output=True, text=True, env=hook_env, cwd=proj)
 check("hook blocks (exit 2) when checks fail", r.returncode == 2 and "lint failed ✗" in r.stderr,
       f"rc={r.returncode} {r.stderr[-300:]}")
+# An ADW builder is a headless `claude -p --agent builder` session: its transcript starts with
+# setup entries, and the Stop event names it as transcript_path. Line 1 alone found no job.
+headless = BOX / "headless.jsonl"
+headless.write_text("\n".join(json.dumps(e) for e in [
+    {"type": "agent-setting", "agentSetting": "builder"},
+    {"type": "session-owner", "accountUuid": "x"},
+    {"type": "queue-operation", "operation": "enqueue", "content": "x"},
+    {"type": "user", "message": {"role": "user", "content": f"Job: adw-1234abcd. Job folder: x/. Main checkout: "
+                                                            f"{proj.as_posix()}. Worktree: {Path(wt).as_posix()}. Branch: b."}},
+]) + "\n", encoding="utf-8")
+r = subprocess.run([BASH, "-c", hook_cmd], input=json.dumps({"stop_hook_active": False, "transcript_path": str(headless)}),
+                   capture_output=True, text=True, env=hook_env, cwd=proj)
+check("hook finds the job in a headless (L3) transcript and blocks when checks fail",
+      r.returncode == 2 and "lint failed ✗" in r.stderr, f"rc={r.returncode} {r.stderr[-300:]}")
 r = sh([BASH, "-lc", f"factory/bin/gate {jid}"], proj, env=env)
 check("gate FAIL on failing checks", r.returncode == 1 and "GATE: FAIL" in r.stdout, r.stdout + r.stderr)
 (Path(wt) / "FAIL_CHECKS").unlink()
@@ -302,6 +316,7 @@ check("an APPROVE verdict is refused (READY or ESCALATE only)", jmain(["advance"
 gh_calls.clear()
 check("READY → needs-human", jmain(["advance", jid, "needs-human"]) == 0
       and json.loads((jd / "job.json").read_text())["stage"] == "needs-human")
+ended_at_handover = json.loads((jd / "job.json").read_text())["ended"]
 pr_comments = [c for c in gh_calls if c[:2] == ("pr", "comment")]
 check("READY posts 'ready for your review' on the PR",
       pr_comments and "ready for your review (you merge)" in pr_comments[0][-1], gh_calls)
@@ -382,6 +397,9 @@ jmain(["check-merges"])  # what the control room runs every minute
 server.wait(timeout=10)
 stage = json.loads((jd / "job.json").read_text())["stage"]
 check("merged by a person: job stage", stage == "merged", stage)
+ended = json.loads((jd / "job.json").read_text())["ended"]
+check("the job's time stops at the hand-over, not at the merge (the wait for a person isn't work)",
+      ended_at_handover and ended == ended_at_handover, f"{ended_at_handover} -> {ended}")
 check("merged: needs-human label removed",
       any(c[:2] == ("issue", "edit") and "--remove-label" in c for c in gh_calls), gh_calls)
 check("merged: dev server stopped", server.poll() is not None)

@@ -648,7 +648,14 @@ def advance(job, stage):
         remove_worktree(job)
 
     job["stage"] = stage
-    job["ended"] = now() if stage in TERMINAL | WAITING else None
+    # When the work stopped: the first move into a waiting or final stage. needs-human →
+    # merged keeps it, so the card's time (and the chat's cost window) leaves out the hours
+    # the PR waited for a person. A new round clears it.
+    resting = TERMINAL | WAITING
+    if stage not in resting:
+        job["ended"] = None
+    elif old not in resting or not job.get("ended"):
+        job["ended"] = now()
     return job
 
 

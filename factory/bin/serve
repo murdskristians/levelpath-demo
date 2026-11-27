@@ -42,7 +42,7 @@ REPO = FACTORY.parent
 JOBS = FACTORY / "jobs"
 RUNS = REPO / "agents"  # ADW runs (and L1 job folders without a state file, which are skipped)
 WINDOWS = os.name == "nt"
-ADW_STAGES = {"new": "intake", "closed": "rejected"}  # ADW stage -> board column stage
+ADW_STAGES = {"new": "intake"}  # ADW stage -> board column stage ("closed": a PR closed unmerged)
 
 # Reuse the factory's transcript reading and prices (factory/bin/job is the one source).
 _loader = importlib.machinery.SourceFileLoader("factory_job", str(FACTORY / "bin" / "job"))
@@ -81,9 +81,11 @@ def adw_job(adw_id):
     stage = ADW_STAGES.get(state.get("stage"), state.get("stage"))
     started = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(min(
         (m for p in folder.iterdir() if (m := mtime(p)) is not None), default=time.time())))
-    waiting = stage in {"needs-human", "needs-info", "merged", "rejected"}
-    ended = (time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime((folder / "adw_state.json").stat().st_mtime))
-             if waiting else None)
+    waiting = stage in {"needs-human", "needs-info", "merged", "rejected", "closed"}
+    # When the work stopped: the hand-over wrote decision.md. The state file changes later
+    # (cleanup after the merge), and its time would count the hours the PR waited for a person.
+    stopped = folder / "decision.md" if (folder / "decision.md").exists() else folder / "adw_state.json"
+    ended = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(stopped.stat().st_mtime)) if waiting else None
     issue, pr = state.get("issue_number"), state.get("pr_number")
     return {
         "id": f"adw-{adw_id}",

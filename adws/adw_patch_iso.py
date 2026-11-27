@@ -29,7 +29,9 @@ SCRIPT = "adw_patch_iso"
 
 
 def main() -> int:
-    args = [a for a in sys.argv[1:] if not a.startswith("--")]
+    # The feedback is everything after the issue and the run id, as written: text that
+    # starts with "--" is still feedback (the control room passes it as one argument).
+    args = sys.argv[1:]
     if len(args) < 2:
         print(__doc__)
         return 2
