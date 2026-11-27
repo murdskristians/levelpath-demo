@@ -9,6 +9,7 @@ import {
   suggestionRequestSchema,
   suggestionResponseSchema,
   suggestionSchema,
+  updatePurchaseRequestSchema,
 } from './purchase-requests.js';
 
 const SUPPLIER = 'a0000000-0000-4000-8000-000000000201';
@@ -206,6 +207,18 @@ describe('suggestionSchema', () => {
     ['an extra field', { ...suggestion, tenantId: SUPPLIER }],
   ])('rejects %s', (_what, output) => {
     expect(suggestionSchema.safeParse(output).success).toBe(false);
+  });
+});
+
+describe('updatePurchaseRequestSchema', () => {
+  it('parses a valid edit body', () => {
+    expect(updatePurchaseRequestSchema.parse(valid)).toMatchObject(valid);
+  });
+
+  it('rejects an extra key', () => {
+    expect(updatePurchaseRequestSchema.safeParse({ ...valid, status: 'approved' }).success).toBe(
+      false,
+    );
   });
 });
 
