@@ -219,3 +219,8 @@ One entry per new concept: what it is, why it matters, where it lives in this re
 - **Why it matters:** most of an agent's cost is reading. On the theme toggle, a Sonnet builder read 0.5M to 1.4M tokens; if the graph points it at the right lines first, it should read less. Whether it does is what the experiment measures.
 - **Where:** the graphify section of [CLAUDE.md](../CLAUDE.md), the "Finding code" step in the planner and builder roles (`.claude/agents/`), `.claude/skills/graphify/`, and `graphify-out/` in the main checkout only (git-ignored, rebuilt by Chris after a merge). Agents query it there with `cd <main checkout> && graphify query …`, so a job worktree never needs its own copy. The measurements are in [docs/experiments/](experiments/).
 - **Lesson from run 3:** installing it is not using it. With only CLAUDE.md rules and advisory hooks, no agent queried the graph once; each role's own steps won. A tool reaches agents through their role file.
+
+## Editing a draft: one schema, one form, one 404
+
+- **What:** `PUT /purchase-requests/:id` reuses the create schema and the new-request form (given an `initial` draft), so validation and Suggest fields exist once. "Not yours" and "missing" share one 404, and the update is also filtered on `requester_id` and `status = 'draft'`, so a crafted id reveals nothing and a concurrent submit can't be overwritten.
+- **Where:** `update` in [purchase-requests.service.ts](../apps/api/src/purchase-requests/purchase-requests.service.ts); the tests in [update.spec.ts](../apps/api/src/purchase-requests/update.spec.ts).

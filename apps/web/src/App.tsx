@@ -18,7 +18,7 @@ function Dashboard({ userId, picker }: { userId: string; picker: ReactNode }) {
   const [mine, setMine] = useState<PurchaseRequest[] | null>(null);
   const [toDecide, setToDecide] = useState<PurchaseRequest[] | null>(null);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
-  const [formOpen, setFormOpen] = useState(false);
+  const [formState, setFormState] = useState<'closed' | 'new' | PurchaseRequest>('closed');
   const [error, setError] = useState<unknown>(null);
 
   // Drops responses that arrive after this user's dashboard is gone.
@@ -67,15 +67,16 @@ function Dashboard({ userId, picker }: { userId: string; picker: ReactNode }) {
       () => api.decide(id, input),
       () => Promise.all([loadToDecide(), loadMine()]),
     );
-  const create = async (input: Parameters<typeof api.createRequest>[0]) => {
+  const editing = typeof formState === 'object' ? formState : undefined;
+  const save = async (input: Parameters<typeof api.createRequest>[0]) => {
     setError(null);
     if (
       await run(
-        () => api.createRequest(input),
+        () => (editing ? api.updateRequest(editing.id, input) : api.createRequest(input)),
         () => undefined,
       )
     ) {
-      setFormOpen(false);
+      setFormState('closed');
       await loadMine();
     }
   };
@@ -95,18 +96,22 @@ function Dashboard({ userId, picker }: { userId: string; picker: ReactNode }) {
         <ErrorAlert error={error} />
         <section aria-labelledby="purchase-requests-heading">
           <h2 id="purchase-requests-heading">Purchase requests</h2>
-          {formOpen && (
+          {formState !== 'closed' && (
             <NewRequestForm
+              key={editing?.id ?? 'new'}
               suppliers={suppliers}
-              onCreate={create}
+              initial={editing}
+              onSave={save}
               // Not through `run`: a failed suggestion is the form's note, never the ErrorAlert.
               onSuggest={(description) => api.suggest(description)}
-              onCancel={() => setFormOpen(false)}
+              onCancel={() => setFormState('closed')}
             />
           )}
-          {mine && <RequestList requests={mine} onSubmit={(id) => void submit(id)} />}
-          {!formOpen && (
-            <button type="button" onClick={() => setFormOpen(true)}>
+          {mine && (
+            <RequestList requests={mine} onSubmit={(id) => void submit(id)} onEdit={setFormState} />
+          )}
+          {formState === 'closed' && (
+            <button type="button" onClick={() => setFormState('new')}>
               New request
             </button>
           )}
