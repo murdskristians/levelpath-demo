@@ -89,7 +89,6 @@ describe('theme in App', () => {
     localStorage.setItem('levelpath.userId', ALICE);
     render(<App />);
     fireEvent.click(toDark());
-    await screen.findByText(/Acme Corp/, { selector: '.identity' }).catch(() => undefined);
     fireEvent.change(screen.getByLabelText('User'), { target: { value: AMIR } });
     await waitFor(() => expect(html().dataset.theme).toBe('dark'));
     expect(localStorage.getItem(THEME_KEY)).toBe('dark');
