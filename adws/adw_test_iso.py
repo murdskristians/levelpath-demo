@@ -40,8 +40,9 @@ def main() -> int:
         print(f"No ADW run {adw_id} for issue #{issue} (agents/{adw_id}/adw_state.json)")
         return 1
     logger = setup_logger(adw_id, SCRIPT)
-    return 0 if pipeline.gate(state, logger) else 1
-    return 0
+    with pipeline.on_crash(state, logger):  # a failure ends at needs-human, never "running"
+        passed = pipeline.gate(state, logger)
+    return 0 if passed else 1
 
 
 if __name__ == "__main__":

@@ -41,10 +41,11 @@ def main() -> int:
         print(f"No ADW run {adw_id} for issue #{issue} (agents/{adw_id}/adw_state.json)")
         return 1
     logger = setup_logger(adw_id, SCRIPT)
-    verdicts = pipeline.review(state, logger)
-    if all(v == "PASS" for v in verdicts.values()):
-        pipeline.approve(state, logger)
-    else:
+    with pipeline.on_crash(state, logger):  # a failure ends at needs-human, never "running"
+        verdicts = pipeline.review(state, logger)
+        if all(v == "PASS" for v in verdicts.values()):
+            pipeline.approve(state, logger)
+    if not all(v == "PASS" for v in verdicts.values()):
         print(f"Changes requested: {verdicts}")
         return 1
     return 0

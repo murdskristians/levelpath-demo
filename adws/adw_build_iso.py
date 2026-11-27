@@ -40,7 +40,8 @@ def main() -> int:
         return 1
     logger = setup_logger(adw_id, SCRIPT)
     reason = "This is round 1: implement spec.md following plan.md." if not state.get("round") else         f"Read round-{state.get('round')}/ (checks and reviews) and fix what failed, push, and update build.md."
-    pipeline.build(state, logger, reason)
+    with pipeline.on_crash(state, logger):  # a failure ends at needs-human, never "running"
+        pipeline.build(state, logger, reason)
     return 0
 
 

@@ -787,6 +787,10 @@ Format:
      - After: everything after the issue and the run id is the feedback.
   6. **The docs.**
      - `HARNESS.md`'s test count was out of date, its guard row missed the push and run-file rules, and it listed branch protection as a merge layer that, as configured, didn't hold.
+     - The READMEs said L3 cleanup marks a run merged, but a closed PR marks it closed.
+  7. **Found in the review of this PR.**
+     - **The step-by-step scripts.** Before: `adw_plan_iso`, `adw_build_iso`, `adw_test_iso` and `adw_review_iso` ran the pipeline without `on_crash`, so a failure there still left a "running" card. After: they use it too.
+     - **A factory PR closed on GitHub.** Before: a waiting factory job whose PR a person closed on GitHub, instead of merging it, stayed at needs-human ("your call") for good. Only `job reject` closed one out. After: the merge check, which the control room runs every minute, records it as rejected, with the reason in `rejection.md`, takes its labels off, and doesn't try to close the PR again.
 - **Outside the code:**
   - Branch protection on `main` now includes administrators: the agents act as Chris's account, so before, GitHub would have let them push to `main`. With 0 approvals required, Chris still merges PRs as before.
   - The dev database held 45 leftover requests from test and browser runs, which show in a demo. A reset to the seed data was planned for Chris to run.
@@ -797,6 +801,6 @@ Format:
   - `graph_first` blocked the L3 planner's and builders' first code read until a graph query;
   - the factory's queue and summary.
 - **Tests:**
-  - factory checks 63, up 2: the hook on an L3-shaped transcript, and the job time kept through the merge. Both fail on the old code.
+  - factory checks 66, up 5: the hook on an L3-shaped transcript, the job time kept through the merge, and a PR closed on GitHub (3 checks). The first two fail on the old code.
   - pipeline 17, up 1: a stop at the gate is handed over, and a parked stop passes through.
 - **Why this prevents a repeat:** each finding came from running the part, and each fix has a test that fails on the old code.

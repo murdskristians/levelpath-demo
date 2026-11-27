@@ -405,6 +405,28 @@ check("merged: needs-human label removed",
 check("merged: dev server stopped", server.poll() is not None)
 check("merged: worktree removed", not Path(wt).exists(), wt)
 
+# ---- 10a. a person closes a waiting job's PR on GitHub instead of merging it ----
+closed_id = "002-closed-on-github"
+closed_dir = proj / "factory/jobs" / closed_id
+closed_dir.mkdir()
+fixture = json.loads((jd / "job.json").read_text())
+fixture.update(id=closed_id, stage="needs-human", pr=8, branch=f"factory/{closed_id}",
+               worktree=(BOX / "no-worktree").as_posix())
+(closed_dir / "job.json").write_text(json.dumps(fixture), encoding="utf-8")
+pr_state["state"] = "CLOSED"
+gh_calls.clear()
+jmain(["check-merges"])
+closed_job = json.loads((closed_dir / "job.json").read_text())
+check("a PR closed on GitHub without merging: the waiting job is rejected, with the reason",
+      closed_job["stage"] == "rejected" and "closed on GitHub without merging"
+      in (closed_dir / "rejection.md").read_text(), closed_job["stage"])
+check("... its labels come off, and the factory doesn't close the PR again",
+      any(c[:2] == ("issue", "edit") and "--remove-label" in c for c in gh_calls)
+      and not any(c[:2] == ("pr", "close") for c in gh_calls), gh_calls)
+check("... and its time still stops at the hand-over", closed_job["ended"] == fixture["ended"],
+      f"{fixture['ended']} -> {closed_job['ended']}")
+pr_state["state"] = "MERGED"
+
 # ---- 10b. `port stop` stops the whole dev command, not only the process that listens ----
 if os.name == "nt" and shutil.which("node"):
     tport = 5191
