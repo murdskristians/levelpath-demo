@@ -236,11 +236,29 @@ class CrashTest(unittest.TestCase):
         st = self.crash()
         self.assertEqual(st["stage"], "needs-human")
 
-    def test_a_stop_is_not_a_crash(self):
+    def test_a_stop_that_parked_the_run_passes_through(self):
+        for parked in ("needs-info", "rejected"):
+            st = state()
+            st.update(stage=parked)
+            with self.assertRaises(pipeline.Stop):
+                with pipeline.on_crash(st, LOG):
+                    raise pipeline.Stop("intake rejected the issue")
+            self.assertFalse((self.dir / "decision.md").exists())
+            self.assertEqual(st["stage"], parked)
+
+    def test_a_stop_in_a_running_stage_is_handed_over(self):
+        # Postgres down: the gate exits 2, the pipeline raises Stop at stage gate
+        pipeline.hand_over = lambda s, l: (self.handed.append(s), s.update(stage="needs-human"))
+        st = state()
+        st.update(stage="gate")
         with self.assertRaises(pipeline.Stop):
-            with pipeline.on_crash(state(), LOG):
-                raise pipeline.Stop("intake rejected the issue")
-        self.assertFalse((self.dir / "decision.md").exists())
+            with pipeline.on_crash(st, LOG):
+                raise pipeline.Stop("the gate couldn't run: 127.0.0.1:5432 is down, run `pnpm db:up`")
+        decision = (self.dir / "decision.md").read_text(encoding="utf-8")
+        self.assertTrue(decision.startswith("ESCALATE"))
+        self.assertIn("stopped at stage gate", decision)
+        self.assertIn("pnpm db:up", decision)
+        self.assertEqual(st["stage"], "needs-human")
 
 
 class TriggerTest(unittest.TestCase):

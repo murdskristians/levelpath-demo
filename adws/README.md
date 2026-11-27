@@ -23,7 +23,7 @@ uv run adws/adw_sdlc_iso.py <issue>      the whole run
 | `adw_test_iso.py <issue> <adw_id>` | The gate on the current round; exit 0 PASS, 1 FAIL. |
 | `adw_review_iso.py <issue> <adw_id>` | The routed reviewers; all PASS → approver and hand-over. |
 | `adw_patch_iso.py <issue> <adw_id> "<feedback>"` | Your feedback on a waiting run → more rounds. |
-| `adw_cleanup_iso.py <issue> <adw_id>` | After you merged or closed the PR: removes the worktree (long paths too) and the local branch, and records the run as merged. |
+| `adw_cleanup_iso.py <issue> <adw_id>` | After you merged or closed the PR: removes the worktree (long paths too) and the local branch, and records the run as merged or closed. |
 | `adw_triggers/trigger_cron.py` | Opt-in poller: your `adw` or `adw patch` comments start runs. |
 | `adw_tests/health_check.py` | Checks git, `gh`, and one tiny `claude -p` call (haiku, capped at $0.05). |
 

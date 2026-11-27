@@ -35,7 +35,8 @@ def main() -> int:
         print(__doc__)
         return 2
     state, logger = pipeline.start(args[0], args[1] if len(args) > 1 else None, SCRIPT, lambda i: setup_logger(i, SCRIPT))
-    pipeline.plan(state, logger)
+    with pipeline.on_crash(state, logger):  # a failure ends at needs-human, never "running"
+        pipeline.plan(state, logger)
     print(f"Planned. Next: uv run adws/adw_build_iso.py {args[0]} {state.get('adw_id')}")
     return 0
 

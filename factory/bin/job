@@ -517,7 +517,8 @@ def advance(job, stage):
         waiting = LABELS["needs_info"] if old == "needs-info" else LABELS["needs_human"]
         label("issue", job["issue"], remove=f"{LABELS['queue']},{waiting}")
         if job["pr"]:
-            gh("pr", "close", str(job["pr"]))
+            if pr_state(job) != "CLOSED":  # a person may have closed it on GitHub already
+                gh("pr", "close", str(job["pr"]))
             run(["git", "push", "origin", "--delete", job["branch"]], check=False)
 
     elif old == "intake":
@@ -648,7 +649,14 @@ def advance(job, stage):
         remove_worktree(job)
 
     job["stage"] = stage
-    job["ended"] = now() if stage in TERMINAL | WAITING else None
+    # When the work stopped: the first move into a waiting or final stage. needs-human →
+    # merged keeps it, so the card's time (and the chat's cost window) leaves out the hours
+    # the PR waited for a person. A new round clears it.
+    resting = TERMINAL | WAITING
+    if stage not in resting:
+        job["ended"] = None
+    elif old not in resting or not job.get("ended"):
+        job["ended"] = now()
     return job
 
 
@@ -750,10 +758,20 @@ def detect_merges():
     issue. Moves each such job to merged and returns every job."""
     jobs = all_jobs()
     for j in jobs:
-        if j["stage"] not in TERMINAL and j["pr"] and pr_state(j) == "MERGED":
+        if j["stage"] in TERMINAL or not j["pr"]:
+            continue
+        state = pr_state(j)
+        if state == "MERGED":
             save(advance(sync(j), "merged"))
             # stderr: `job queue` prints its rows on stdout for the orchestrator to read.
             print(f"{j['id']}: merged (PR #{j['pr']})", file=sys.stderr)
+        elif state == "CLOSED" and j["stage"] in WAITING:
+            # A person closed the PR on GitHub instead of merging it: that is a no, as
+            # `job reject` would record it. Without this the card waits on them for good.
+            (job_dir(j["id"]) / "rejection.md").write_text(
+                f"REJECTED\n\nPR #{j['pr']} was closed on GitHub without merging, while the job was {j['stage']}.\n")
+            save(advance(sync(j), "rejected"))
+            print(f"{j['id']}: rejected (PR #{j['pr']} closed unmerged)", file=sys.stderr)
     return jobs
 
 

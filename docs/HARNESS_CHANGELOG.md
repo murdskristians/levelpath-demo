@@ -759,3 +759,48 @@ Format:
   - The run ended READY after 2 rounds, for $1.81. The light theme matched `main` exactly when compared rule by rule (31 rules). PR #59 was closed unmerged, as a demo task.
 - **Tests:** 26 new guard checks (the misplaced review among them), and a pipeline test where the first review lands beside the round folder and the retry is told the exact path.
 - **Why this prevents a repeat:** the agent learns the path from its prompt and its role, and if it still gets it wrong, the guard stops the write and tells it the right path, before a round is lost.
+
+## 2026-11-27: Final pre-demo check: run things, not just read them
+
+- **What was missing:** the review before this one read the code. This one ran the parts that could fail:
+  - the rehearsal's own transcripts;
+  - the live API (two tenants);
+  - the evals;
+  - feedback text through `uv run`;
+  - the control room on a spare port;
+  - the factory's queue.
+- **Found, before → after:**
+  1. **A run that stopped on a failure still looked busy.**
+     - Before: the pipeline's `Stop` for a failure left the run in a running stage. That covered a gate that couldn't run (Postgres down), a worktree that couldn't be created, and intake or the planner writing nothing. The card pulsed for good, and the reason only reached `control-room.log`. The crash fix earlier that day had covered exceptions only.
+     - After: `on_crash` also hands over a `Stop` that left a running stage. It writes ESCALATE with the reason and logs it, so the orchestrator view shows it. A `Stop` that parked the run (needs-info, rejected) passes through.
+  2. **The L3 builder's stop hook did nothing.**
+     - Before: `gate --hook` read only line 1 of the transcript. A headless `claude -p --agent builder` session's transcript starts with setup entries (`agent-setting`, `session-owner`, `queue-operation`), so the hook found no job and let the builder stop unchecked. The rehearsal's transcripts show it ran for 1.5 s. L2 builders, whose transcript starts with the prompt, were checked.
+     - After: it reads the first user prompt within 30 lines, like `factory/bin/job` does. L3 builder rounds now include the checks, about 6 minutes, as L2's already did.
+  3. **A closed run was labelled "rejected".**
+     - Before: an ADW run whose PR was closed unmerged showed as rejected.
+     - After: the Done column shows it as "closed, not merged".
+  4. **Card times counted the wait for a person.**
+     - Before: factory jobs 002 and 003 showed 16h58m, and the rehearsal 1h16m instead of 47m. The factory reset `ended` at the merge. The control room took an ADW run's end from `adw_state.json`, which cleanup touches.
+     - After: the factory keeps the first time a job stopped working. Moving from needs-human to merged keeps it, and a new round clears it. This also ends the orchestrator chat's cost window there. An ADW run ends at `decision.md`'s time. Jobs recorded before this keep their old times.
+  5. **Feedback starting with `--` was lost.**
+     - Before: `adw_patch_iso.py` dropped every argument starting with `--`, so such feedback vanished and the run didn't start.
+     - After: everything after the issue and the run id is the feedback.
+  6. **The docs.**
+     - `HARNESS.md`'s test count was out of date, its guard row missed the push and run-file rules, and it listed branch protection as a merge layer that, as configured, didn't hold.
+     - The READMEs said L3 cleanup marks a run merged, but a closed PR marks it closed.
+  7. **Found in the review of this PR.**
+     - **The step-by-step scripts.** Before: `adw_plan_iso`, `adw_build_iso`, `adw_test_iso` and `adw_review_iso` ran the pipeline without `on_crash`, so a failure there still left a "running" card. After: they use it too.
+     - **A factory PR closed on GitHub.** Before: a waiting factory job whose PR a person closed on GitHub, instead of merging it, stayed at needs-human ("your call") for good. Only `job reject` closed one out. After: the merge check, which the control room runs every minute, records it as rejected, with the reason in `rejection.md`, takes its labels off, and doesn't try to close the PR again.
+- **Outside the code:**
+  - Branch protection on `main` now includes administrators: the agents act as Chris's account, so before, GitHub would have let them push to `main`. With 0 approvals required, Chris still merges PRs as before.
+  - The dev database held 45 leftover requests from test and browser runs, which show in a demo. A reset to the seed data was planned for Chris to run.
+- **Checked by running, and fine:**
+  - tenant isolation on the live API: a Globex user sees no Acme request, and gets 404 submitting or deciding one;
+  - evals 15/15 on the mock;
+  - feedback text with quotes, line breaks and symbols survives `uv run`;
+  - `graph_first` blocked the L3 planner's and builders' first code read until a graph query;
+  - the factory's queue and summary.
+- **Tests:**
+  - factory checks 66, up 5: the hook on an L3-shaped transcript, the job time kept through the merge, and a PR closed on GitHub (3 checks). The first two fail on the old code.
+  - pipeline 17, up 1: a stop at the gate is handed over, and a parked stop passes through.
+- **Why this prevents a repeat:** each finding came from running the part, and each fix has a test that fails on the old code.

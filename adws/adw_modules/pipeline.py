@@ -381,27 +381,41 @@ def screenshots(state: ADWState, n: int) -> list:
 # ---- entry points the phase scripts call -----------------------------------------------
 
 
+RUNNING = {"intake", "spec", "build", "gate", "review", "approve"}  # the stages the board shows as live
+
+
 @contextmanager
 def on_crash(state: ADWState, logger):
-    """An unexpected error (a GitHub call that failed, a bug) ends the run at
-    needs-human with the error in decision.md, then is raised again. Without this the
-    run's last stage stays a running one, and the board shows it running for good."""
+    """A run never ends in a running stage. An unexpected error (a GitHub call that
+    failed, a bug), or a Stop that left a running stage (the gate couldn't run because
+    Postgres is down, the planner wrote no spec), ends the run at needs-human with the
+    reason in decision.md and the log, then is raised again. A Stop that already parked
+    the run (needs-info, rejected) passes through. Without this the board shows the run
+    running for good, and the reason only reaches control-room.log."""
     try:
         yield
-    except Stop:
+    except Stop as stop:
+        stage = state.get("stage")
+        if stage in RUNNING:
+            logger.error(f"the run stopped at stage {stage}: {stop}")
+            hand_over_failure(state, logger, f"The run stopped at stage {stage}: {stop}. Nothing was merged.")
         raise
     except Exception as e:
         stage = state.get("stage")
         logger.exception(f"the run crashed at stage {stage}: {type(e).__name__}: {e}")
-        why = (f"The run crashed at stage {stage}: `{type(e).__name__}: {str(e)[:300]}`. The traceback is in "
-               f"`agents/{state.get('adw_id')}/<script>/execution.log`. Nothing was merged.")
-        try:
-            escalate(state, logger, why)
-        except Exception as again:  # GitHub may be what failed: the board still has to show it
-            logger.exception(f"couldn't post the crash on GitHub: {type(again).__name__}: {again}")
-            state.update(stage="needs-human")
-            state.save("crashed")
+        hand_over_failure(state, logger, f"The run crashed at stage {stage}: `{type(e).__name__}: {str(e)[:300]}`. "
+                                         f"The traceback is in `agents/{state.get('adw_id')}/<script>/execution.log`. "
+                                         f"Nothing was merged.")
         raise
+
+
+def hand_over_failure(state: ADWState, logger, why: str) -> None:
+    try:
+        escalate(state, logger, why)
+    except Exception as again:  # GitHub may be what failed: the board still has to show it
+        logger.exception(f"couldn't post the failure on GitHub: {type(again).__name__}: {again}")
+        state.update(stage="needs-human")
+        state.save("failed")
 
 
 def sdlc(state: ADWState, logger) -> None:

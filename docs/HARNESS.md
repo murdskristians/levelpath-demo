@@ -53,11 +53,14 @@ A gate failure or a CHANGES verdict starts the next build round, up to three, th
 
 - **Nothing merges but Chris.** Four layers:
   - no merge command in any driver;
-  - `guard.py` blocks `gh pr merge`, API merges, approvals and pushes to `main`;
+  - `guard.py` blocks `gh pr merge`, API merges, approvals and pushes to `main` (also as `HEAD`, `@`, `git -C`, `--all`);
   - `settings.json` denies `gh pr merge`;
-  - branch protection.
+  - branch protection on `main`: a PR is required, also for admins. The agents act as Chris's account, so without "include administrators" GitHub would let them push to `main` directly.
 
   The guard runs even under `--dangerously-skip-permissions` (tested).
+
+- **Run files land where the run reads them:** in a job folder an agent may write only its own file (`intake.md`, `spec.md`, `plan.md`, `build.md`, `decision.md`, `round-N/review-<pass>.md`), and the guard blocks those names anywhere else.
+- **A run never ends looking busy:** a crash, or a stop such as a gate that couldn't run, ends at `needs-human` with the reason in `decision.md`.
 
 - **Secrets:** no tool or shell command may touch `.env`, dump the environment or expand a secret-named variable.
 - **Tests stay honest:** in a bug run, tests that exist on `main` are locked; agents can't edit applied migrations or the harness's own protected files. The gate also fails any branch that changed a protected file.
@@ -78,19 +81,19 @@ A gate failure or a CHANGES verdict starts the next build round, up to three, th
 
 Code from the public ZazenCodes factory (GPLv3) was adapted here. From my two private course harnesses, git-adw and tac-combined, only **ideas** came over: every file listed as an idea was written for this repository.
 
-| Part                                                              | Source                                                   | What changed                                                                                                            |
-| ----------------------------------------------------------------- | -------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| `.claude/skills/factory/`, `factory/bin/*`, `dashboard.html`      | factory fork `82b82ca` (ZazenCodes, GPLv3)               | Windows port, never merges, shared roles, risk-routed models, `gate --run` for every driver, the control room (`serve`) |
-| `factory/tests/run_test.py`                                       | written for the fork                                     | 57 checks: Windows, locks, gate, hook, cost, no-merge, shots, issue titles                                              |
-| `intake`, `builder`, `approver`, `reviewer-security`              | factory fork                                             | `TYPE:` (feature, bug, chore), this stack, tenant isolation; the approver only recommends                               |
-| `planner`                                                         | factory `spec-writer`, plus git-adw's typed plans (idea) | writes `spec.md` and `plan.md`; checks library versions first                                                           |
-| `verifier`, `reviewer-bugs`, `reviewer-spec`, `scout`             | written here, from ideas in all three                    | run the app, find bugs, trace the spec, scout the code; findings Important/Nit (`REVIEW.md`)                            |
-| `adws/`                                                           | written here, from git-adw's ADW design (idea: PITER)    | roles via `claude -p --agent`, file contracts, the factory's gate, caps, no merge, owner-only trigger                   |
-| `.claude/hooks/guard.py`, `format_on_edit.py`                     | written here                                             | blocks secrets, merges, migrations, test edits in bug runs, protected paths; formats the edited file                    |
-| `/intent /spec /plan /verify /review /try`                        | written here                                             | the L1 driver over the same roles                                                                                       |
-| `.claude/hooks/graph_first.py`, `adws/adw_tests/test_pipeline.py` | written here                                             | the planner and builder query the graph first; the ADW pipeline's unit tests                                            |
-| `.claude/skills/graphify/`, graphify's hooks                      | graphify 0.9.119 (Graphify-Labs, Apache 2.0)             | installed as is; licence and NOTICE kept next to the skill                                                              |
-| `CLAUDE.md`, `REVIEW.md`, `docs/templates/`, skills               | written here                                             | -                                                                                                                       |
+| Part                                                              | Source                                                   | What changed                                                                                                                                 |
+| ----------------------------------------------------------------- | -------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `.claude/skills/factory/`, `factory/bin/*`, `dashboard.html`      | factory fork `82b82ca` (ZazenCodes, GPLv3)               | Windows port, never merges, shared roles, risk-routed models, `gate --run` for every driver, the control room (`serve`)                      |
+| `factory/tests/run_test.py`                                       | written for the fork                                     | 66 checks: Windows, locks, gate, hook (L2 and L3), cost, no-merge, shots, the control room                                                   |
+| `intake`, `builder`, `approver`, `reviewer-security`              | factory fork                                             | `TYPE:` (feature, bug, chore), this stack, tenant isolation; the approver only recommends                                                    |
+| `planner`                                                         | factory `spec-writer`, plus git-adw's typed plans (idea) | writes `spec.md` and `plan.md`; checks library versions first                                                                                |
+| `verifier`, `reviewer-bugs`, `reviewer-spec`, `scout`             | written here, from ideas in all three                    | run the app, find bugs, trace the spec, scout the code; findings Important/Nit (`REVIEW.md`)                                                 |
+| `adws/`                                                           | written here, from git-adw's ADW design (idea: PITER)    | roles via `claude -p --agent`, file contracts, the factory's gate, caps, no merge, owner-only trigger                                        |
+| `.claude/hooks/guard.py`, `format_on_edit.py`                     | written here                                             | blocks secrets, merges and pushes to main, migrations, test edits in bug runs, protected paths, misplaced run files; formats the edited file |
+| `/intent /spec /plan /verify /review /try`                        | written here                                             | the L1 driver over the same roles                                                                                                            |
+| `.claude/hooks/graph_first.py`, `adws/adw_tests/test_pipeline.py` | written here                                             | the planner and builder query the graph first; the ADW pipeline's unit tests                                                                 |
+| `.claude/skills/graphify/`, graphify's hooks                      | graphify 0.9.119 (Graphify-Labs, Apache 2.0)             | installed as is; licence and NOTICE kept next to the skill                                                                                   |
+| `CLAUDE.md`, `REVIEW.md`, `docs/templates/`, skills               | written here                                             | -                                                                                                                                            |
 
 The changelog records what changed and why. Credits and licences are in [CREDITS.md](../CREDITS.md).
 
