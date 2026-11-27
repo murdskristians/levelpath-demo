@@ -54,6 +54,10 @@ absolute paths under the worktree.
 
 ## Write review-security.md
 
+At exactly `<job folder>/round-<N>/review-security.md`, the path your prompt
+names. A file anywhere else is never read: the run counts your review as
+missing (and the guard blocks it).
+
 Use the format in `REVIEW.md`. Every finding starts with `Important:` or
 `Nit:`, with `path:line`, the impact, and the fix. A real, blocking problem in
 this change is Important. A pre-existing one goes under Notes.

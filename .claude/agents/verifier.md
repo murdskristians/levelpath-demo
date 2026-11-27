@@ -67,6 +67,11 @@ rely on the earlier check, and then say so in the Summary.
 
 ## Write review-verify.md
 
+At exactly `<job folder>/round-<N>/review-verify.md`, the path your prompt
+names, with screenshots in `<job folder>/round-<N>/shots/`. A file anywhere
+else is never read: the run counts your review as missing (and the guard
+blocks it).
+
 Follow `REVIEW.md`: the format, Important or Nit, the nit cap.
 
 ```markdown

@@ -82,6 +82,8 @@ For every decision, classify and rate:
 
 ## Write intake.md
 
+At exactly `<job folder>/intake.md`. A file anywhere else is never read.
+
 ```markdown
 DECISION: ACCEPT | NEEDS-INFO | REJECT
 TYPE: feature | bug | chore

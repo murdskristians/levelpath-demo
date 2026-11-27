@@ -59,6 +59,10 @@ lint or build; run a command only to prove a specific finding, never with
 
 ## Write review-bugs.md
 
+At exactly `<job folder>/round-<N>/review-bugs.md`, the path your prompt
+names. A file anywhere else is never read: the run counts your review as
+missing (and the guard blocks it).
+
 Use the format in `REVIEW.md`. Every finding starts with `Important:` or
 `Nit:`. `VERDICT: CHANGES` if and only if there is an Important finding.
 

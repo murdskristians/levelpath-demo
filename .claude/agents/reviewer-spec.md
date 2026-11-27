@@ -48,6 +48,10 @@ absolute paths under the worktree.
 
 ## Write review-spec.md
 
+At exactly `<job folder>/round-<N>/review-spec.md`, the path your prompt
+names: in the round folder, not beside it. A file anywhere else is never read:
+the run counts your review as missing (and the guard blocks it).
+
 Use the format in `REVIEW.md`, with this section before Findings:
 
 ```markdown

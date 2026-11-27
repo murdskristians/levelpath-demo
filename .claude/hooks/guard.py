@@ -17,6 +17,8 @@ It blocks:
   5. the test lock: in a bug task, edits to test files that exist on the base
      branch (new regression tests are fine)
   6. edits to the harness's protected paths from inside an agent's worktree
+  7. a run file written where nothing reads it: in a job folder only the contract's
+     files (a review only in its round folder), and those names nowhere else
 
 Stdlib only, so it starts fast: one process per tool call.
 """
@@ -287,6 +289,44 @@ def check_edits(tool, inp, cwd):
                       "Agents can't change it from a worktree; write STATUS: BLOCKED instead.")
 
 
+# ---- 7. run files only where the run contract puts them ------------------------------
+
+# The files a role writes into a job folder (agents/<id>/ or factory/jobs/<id>/), by path
+# inside it. Everything else there is written by the scripts (issue.md and agents.json come
+# from /spec in L1), and a file anywhere else is never read: a review written beside its round folder
+# instead of in it once cost a run a whole extra round.
+RUN_FILE = re.compile(r"^((issue|intake|scout|spec|plan|build|decision)\.md|agents\.json"
+                      r"|round-\d+/review-(verify|bugs|spec|security)\.md"
+                      r"|round-\d+/shots/[^/]+\.png)$")
+RUN_FILE_NAME = re.compile(r"^(intake|scout|spec|plan|build|decision|review-(verify|bugs|spec|security))\.md$")
+JOB_FOLDER = re.compile(r"^(.+?)/(agents|factory/jobs)/([^/]+)/(.+)$")
+SAME_NAME_ELSEWHERE = (".claude/", "docs/templates/")  # the roles, commands and templates
+
+
+def check_run_files(tool, inp, cwd):
+    if tool not in EDIT_TOOLS:
+        return
+    path = inp.get("file_path") or inp.get("notebook_path")
+    if not path:
+        return
+    p = norm(path)
+    if not re.match(r"^([a-zA-Z]:)?/", p):
+        p = norm(Path(cwd) / p)
+    m = JOB_FOLDER.match(p)
+    if m and (Path(m.group(1)) / ".git").is_dir():  # under the main checkout, not a worktree
+        folder, rel = f"{m.group(1)}/{m.group(2)}/{m.group(3)}", m.group(4)
+        if not RUN_FILE.match(rel):
+            block(f"{rel} is not a file of the run contract in {folder}/. A role writes only its own "
+                  "file: intake.md, scout.md, spec.md, plan.md, build.md or decision.md in the job folder, "
+                  "and a review as round-<N>/review-<verify|bugs|spec|security>.md in the round folder "
+                  "your prompt names. Write it at that exact path.")
+        return
+    name = p.rsplit("/", 1)[-1]
+    if RUN_FILE_NAME.match(name) and not any(f"/{d}" in p for d in SAME_NAME_ELSEWHERE):
+        block(f"{name} is a run file, and nothing reads it here ({p}). Write it in the job folder your "
+              "prompt names (Job folder: …), reviews in its round-<N>/ folder.")
+
+
 def main():
     event = json.load(sys.stdin)
     tool = event.get("tool_name", "")
@@ -296,6 +336,7 @@ def main():
     check_rm(tool, inp)
     check_merge(tool, inp, cwd)
     check_edits(tool, inp, cwd)
+    check_run_files(tool, inp, cwd)
     sys.exit(0)
 
 

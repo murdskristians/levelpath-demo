@@ -133,6 +133,8 @@ Skip this section in a pair run (L1).
 
 ## Write build.md
 
+At exactly `<job folder>/build.md`. A file anywhere else is never read.
+
 Rewrite it at the end of every round. Keep the Log from earlier rounds.
 
 ```markdown

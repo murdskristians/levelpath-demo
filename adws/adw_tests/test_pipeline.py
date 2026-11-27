@@ -86,6 +86,38 @@ class ApproveTest(unittest.TestCase):
         self.assertEqual(self.handed, ["ESCALATE"])
 
 
+class ReviewPromptTest(unittest.TestCase):
+    """pipeline.review(): the prompt names the exact review file; a missing one gets one retry."""
+
+    def setUp(self):
+        self.dir = Path(tempfile.mkdtemp(prefix="adw-review-"))
+        self.saved = (pipeline.role, pipeline.roles.round_dir)
+        pipeline.roles.round_dir = lambda adw_id, n: self.dir / f"round-{n}"
+        (self.dir / "round-1").mkdir()
+        self.calls = []
+
+    def tearDown(self):
+        pipeline.role, pipeline.roles.round_dir = self.saved
+
+    def test_a_misplaced_review_is_retried_at_the_named_path(self):
+        target = (self.dir / "round-1" / "review-spec.md").as_posix()
+
+        def fake_role(st, logger, name, prompt, model=None, tag=None):
+            self.calls.append((tag, prompt))
+            # The first attempt writes beside the round folder, as a real run did
+            where = self.dir / "review-spec.md" if len(self.calls) == 1 else Path(target)
+            where.write_text("VERDICT: PASS\n", encoding="utf-8")
+
+        pipeline.role = fake_role
+        st = state()
+        st.update(agents={"reviewers": {"spec": "sonnet"}})
+        verdicts = pipeline.review(st, LOG)
+        self.assertEqual(verdicts, {"spec": "PASS"})
+        self.assertEqual([c[0] for c in self.calls], ["review-spec-r1", "review-spec-r1-retry"])
+        self.assertIn(f"Write your review to {target}.", self.calls[0][1])
+        self.assertIn(f"{target} is missing", self.calls[1][1])
+
+
 class RemoveTest(unittest.TestCase):
     """worktrees.remove(): retries a delete that Windows refuses for a few seconds."""
 

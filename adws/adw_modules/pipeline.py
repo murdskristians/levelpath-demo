@@ -133,11 +133,13 @@ def plan(state: ADWState, logger) -> None:
 
     if state.get("risk") == "high":
         role(state, logger, "scout", roles.header(state))
+    prompt = roles.header(state)
     for attempt in range(2):
-        role(state, logger, "planner", roles.header(state), model=model,
-             tag="planner" if not attempt else "planner-retry")
+        role(state, logger, "planner", prompt, model=model, tag="planner" if not attempt else "planner-retry")
         if (d / "spec.md").exists() and (d / "plan.md").exists():
             break
+        prompt += (f"\n{d.as_posix()}/spec.md or {d.as_posix()}/plan.md is missing. Write both now, at exactly "
+                   "those paths, with the Write tool. Your reply is not read: only the files count.")
     else:
         raise Stop("the planner didn't write spec.md and plan.md")
     title = roles.first_line(d / "spec.md").lstrip("# ").strip()
@@ -167,7 +169,7 @@ def build(state: ADWState, logger, reason: str) -> bool:
             return True
         logger.warning(f"build round {n} isn't ready: {problem}")
         prompt = f"{roles.header(state)}\nBuild round {n}. {roles.ports_line(state)}\n" \
-                 f"Your build isn't ready: {problem}. Fix that, then update build.md."
+                 f"Your build isn't ready: {problem}. Fix that, then update {d.as_posix()}/build.md."
     escalate(state, logger, f"Build round {n} never reached a pushed, clean READY state.")
     return False
 
@@ -194,6 +196,8 @@ def gate(state: ADWState, logger) -> bool:
     state.update(stage="gate")
     state.save("gate")
     rd = roles.round_dir(state.get("adw_id"), n)
+    # No agent runs during the gate, so say so: otherwise the run looks stuck for minutes.
+    logger.info(f"→ gate: factory/checks.sh on round {n} (install, build, lint, tests: about 6 minutes)")
     res = subprocess.run([sys.executable, "-X", "utf8", str(roles.REPO / "factory" / "bin" / "gate"),
                           "--run", state.get("worktree_path"), str(rd)],
                          capture_output=True, text=True, encoding="utf-8")
@@ -213,7 +217,12 @@ def review(state: ADWState, logger) -> Dict[str, str]:
 
     def one(key: str, model: str, retry: bool = False) -> None:
         extra = f" {roles.ports_line(state)}" if key == "verify" else ""
-        role(state, logger, roles.reviewer_agent(key), f"{roles.header(state)}\nReview round {n}.{extra}",
+        target = (rd / f"review-{key}.md").as_posix()
+        prompt = f"{roles.header(state)}\nReview round {n}.{extra} Write your review to {target}."
+        if retry:
+            prompt += (f"\n{target} is missing or doesn't start with a VERDICT line. Write it now, at exactly "
+                       f"that path, with the Write tool. Your reply is not read: only the file counts.")
+        role(state, logger, roles.reviewer_agent(key), prompt,
              model=model, tag=f"review-{key}-r{n}" + ("-retry" if retry else ""))  # its own log
 
     with ThreadPoolExecutor(max_workers=len(reviewers) or 1) as pool:  # WAIT FOR ALL
@@ -284,8 +293,9 @@ def approve(state: ADWState, logger) -> None:
             return
         # Seen twice: the decision was in the reply but never written. Only the file counts.
         logger.warning("the approver didn't write decision.md; running it once more")
-        prompt += ("\ndecision.md is missing or doesn't start with READY or ESCALATE. Write it now with "
-                   "the Write tool, in the format your role gives. Your reply is not read: only the file counts.")
+        prompt += (f"\n{d.as_posix()}/decision.md is missing or doesn't start with READY or ESCALATE. Write it now, "
+                   "at exactly that path, with the Write tool, in the format your role gives. Your reply is not "
+                   "read: only the file counts.")
     escalate(state, logger, "The approver didn't write a READY or ESCALATE decision, twice.")
 
 

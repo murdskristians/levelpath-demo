@@ -175,6 +175,24 @@ expect("edit REVIEW.md in the main checkout (Chris's session)", False, "Edit", f
 expect("edit app code in a job worktree", False, "Edit", file_path=f"{FW}/apps/api/src/x.ts")
 expect("a folder named trees/ that is no worktree", False, "Edit", file_path=f"{M}/apps/web/src/trees/Tree.tsx")
 
+# 7. run files only where the contract puts them
+for rel in ["round-1/review-spec.md", "round-2/review-verify.md", "round-1/shots/01_page.png", "build.md",
+            "decision.md", "spec.md", "plan.md", "intake.md", "scout.md", "issue.md", "agents.json"]:
+    expect(f"write agents/<id>/{rel}", False, "Write", file_path=f"{M}/agents/abc123/{rel}")
+expect("write factory/jobs/<id>/round-3/review-security.md", False, "Write",
+       file_path=f"{M}/factory/jobs/001-x/round-3/review-security.md")
+for rel in ["review-spec.md", "round1/review-spec.md", "round-1/review-spek.md", "round-1/checks.md",
+            "adw_state.json", "notes.md"]:
+    expect(f"write agents/<id>/{rel} (not a contract path)", True, "Write", file_path=f"{M}/agents/abc123/{rel}")
+expect("edit factory/jobs/<id>/job.json (the scripts' file)", True, "Edit", file_path=f"{M}/factory/jobs/001-x/job.json")
+expect("write a review with a relative path beside its round folder", True, "Write",
+       file_path="agents/abc123/review-bugs.md")
+expect("write review-spec.md at the worktree's root", True, "Write", file_path=f"{AW}/review-spec.md")
+expect("write build.md in the main checkout's root", True, "Write", file_path=f"{M}/build.md")
+for rel in [".claude/agents/intake.md", ".claude/commands/spec.md", "docs/templates/plan.md"]:
+    expect(f"edit {rel} (same name, not a run file)", False, "Edit", file_path=f"{M}/{rel}")
+expect("write app code in the ADW worktree", False, "Write", file_path=f"{AW}/apps/web/src/theme.ts")
+
 subprocess.run(["git", "worktree", "remove", "--force", FW], cwd=main, capture_output=True)
 subprocess.run(["git", "worktree", "remove", "--force", AW], cwd=main, capture_output=True)
 shutil.rmtree(box, ignore_errors=True)

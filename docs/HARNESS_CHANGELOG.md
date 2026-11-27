@@ -737,3 +737,25 @@ Format:
   - 9 new pipeline cases (15 in all): saves with a reader holding the file, parallel costs, the crash hand-over (also with GitHub down), and the trigger. The old `state.py` and `trigger_cron.py` fail 4 of them.
   - 12 new guard checks (115 in all). The old guard fails 6 of them.
 - **Why this prevents a repeat:** each fix has a test that reproduces the problem on the old code.
+
+## 2026-11-27: The rehearsal: a review written beside its round folder cost a round
+
+- **What went wrong:** in the L3 rehearsal (run `febdcacc`, the theme toggle), the spec reviewer passed round 1 but wrote `agents/febdcacc/review-spec.md` instead of `agents/febdcacc/round-1/review-spec.md`. It did it again on the retry, because the retry used the same prompt.
+  - The pipeline found no review, counted it `invalid`, and ran a whole extra round: about $0.40 and 15 minutes.
+  - The role gave the full path once, at the top. Its "Write review-spec.md" section named only the file.
+  - **Also seen:** the gate runs for about 6 minutes with no agent, so the Agents tab showed nothing new and the run looked stuck.
+- **Before:** a role's file path lived in its instructions alone, and nothing checked where an agent wrote.
+- **After:** three layers, for every role and every driver:
+  - **The prompt names the file.** The ADW pipeline, the factory skill, `/review` and `/verify` say `Write your review to <job folder>/round-<N>/review-<r>.md`. The pipeline's retries (planner, reviewers, approver, builder) name the exact missing path.
+  - **Every role's "Write …" section gives the full path** and says that a file anywhere else is never read.
+  - **The guard enforces it.** In a job folder, an agent may write only the contract's files: `intake.md`, `scout.md`, `spec.md`, `plan.md`, `build.md`, `decision.md` and `round-<N>/review-<verify|bugs|spec|security>.md`. Two exceptions: the verifier's `round-<N>/shots/*.png`, and `issue.md` and `agents.json`, which `/spec` writes. Those file names are blocked anywhere else, except in `.claude/` and `docs/templates/`, which hold the roles and templates of the same names. The scripts' own files, such as `job.json`, `adw_state.json` and `checks.md`, can't be written by an agent either.
+  - The pipeline logs `→ gate: … about 6 minutes` when the gate starts, so the orchestrator view shows it.
+- **What held up from the same day's fixes:**
+  - the builder started the web app with its own `API_PORT`;
+  - three reviewers saving in parallel caused no crash;
+  - the retry got its own log;
+  - no servers were left behind;
+  - cleanup removed the worktree without WinError 32.
+  - The run ended READY after 2 rounds, for $1.81. The light theme matched `main` exactly when compared rule by rule (31 rules). PR #59 was closed unmerged, as a demo task.
+- **Tests:** 26 new guard checks (the misplaced review among them), and a pipeline test where the first review lands beside the round folder and the retry is told the exact path.
+- **Why this prevents a repeat:** the agent learns the path from its prompt and its role, and if it still gets it wrong, the guard stops the write and tells it the right path, before a round is lost.

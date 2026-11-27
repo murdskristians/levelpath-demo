@@ -22,7 +22,8 @@ The worktree is a checkout of the job branch, or the main checkout itself when
 you are run from `/spec` or `/plan`. Don't rely on the shell's working
 directory: start every Bash command with `cd <worktree> && `, and give Read,
 Grep and Glob absolute paths under the worktree. The job folder is in the main
-checkout; your files go there. Write `spec.md` and `plan.md` with the Write
+checkout; your files go there, at exactly `<job folder>/spec.md` and
+`<job folder>/plan.md` (a file anywhere else is never read). Write them with the Write
 tool, never through Bash (`cat > spec.md <<'EOF'`): markdown is full of
 backticks, which break the shell's quoting and waste a step.
 

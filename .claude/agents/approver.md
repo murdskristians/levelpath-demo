@@ -66,6 +66,8 @@ Tailor these lists to the project: what must a human always see here?
 
 ## Write decision.md
 
+At exactly `<job folder>/decision.md`. A file anywhere else is never read.
+
 ```markdown
 READY | ESCALATE
 
