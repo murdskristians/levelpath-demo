@@ -54,8 +54,7 @@ def from_intake(path):
     if fields.get("DECISION") != "ACCEPT":
         die(f"{path} says DECISION: {fields.get('DECISION')}, not ACCEPT")
     surfaces = [s.strip() for s in fields.get("SURFACES", "").split(",") if s.strip() and s.strip() != "none"]
-    risk = CONFIG.get("pin_risk") or fields.get("RISK", "")  # pin_risk: the graphify A/B test holds models equal
-    return {"risk": risk, **agent_set(risk, surfaces)}
+    return agent_set(fields.get("RISK", ""), surfaces)
 
 
 def main(argv):

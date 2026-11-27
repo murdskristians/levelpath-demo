@@ -3,8 +3,8 @@
 
 Wired in the two roles' frontmatter (`.claude/agents/planner.md`, `builder.md`), so it
 runs for them in every driver and for no other agent. It does nothing unless
-`<main checkout>/graphify-out/graph.json` exists: that file is the only switch
-between the two sides of the graphify A/B test (docs/experiments/graphify-ab-protocol.md).
+`<main checkout>/graphify-out/graph.json` exists: without a graph, the hook is
+inert.
 
 With the graph, the agent's first look at source code (`apps/`, `packages/`, `db/`)
 is blocked until it has run one `graphify query`, `explain` or `path`. The reason it
@@ -37,7 +37,7 @@ def main():
     root = Path(os.environ.get("CLAUDE_PROJECT_DIR") or event.get("cwd") or ".")
     out = root / "graphify-out"
     if not (out / "graph.json").exists():
-        return 0  # the "without" side: the hook is inert
+        return 0  # no graph: the hook is inert
     tool, inp = event.get("tool_name", ""), event.get("tool_input") or {}
     # One query per agent: subagents share their parent's session_id, so the role name is part of the key
     who = event.get("agent_id") or f"{event.get('session_id') or 'unknown'}-{event.get('agent_type') or 'main'}"

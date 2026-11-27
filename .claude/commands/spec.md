@@ -49,8 +49,7 @@ slug: $1
    It holds the reviewers with their models, and the planner's and builder's
    model. Every later step uses it. Tell Chris the type, risk, surfaces and
    agent set.
-5. If `agents.json` `risk` is `high`, spawn `scout` with the same header first.
-   (It is intake's `RISK`, unless `factory/config.json` sets `pin_risk`.)
+5. If `RISK: high`, spawn `scout` with the same header first.
 6. Spawn the `planner` with model `agents.json` `planner` and the header alone,
    as the factory does. It writes `spec.md` and `plan.md`.
 7. Copy `agents/<slug>/spec.md` to `docs/specs/<slug>.md` and run
