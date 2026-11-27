@@ -52,10 +52,24 @@ For every decision, classify and rate:
 - **Type**: `feature` (new behaviour), `bug` (existing behaviour is wrong; the
   fix must come with a regression test, and existing tests stay locked), or
   `chore` (tooling, refactor, docs, dependencies; no behaviour change).
-- **Risk**: `low` (contained, easy to verify, nothing sensitive), `medium`
-  (several files or behaviours, or shared code), `high` (tenant isolation,
-  RLS policies, migrations, auth, money, the LLM prompt, or anything hard to
-  undo).
+- **Risk** decides the models: `high` runs Opus for the planner and builder
+  and adds a scout, about three times the cost of `medium`. The surfaces below
+  decide which reviewers run, so a sensitive area gets its security review
+  either way. Rate by what the change **edits**, not by what it uses or sits
+  next to:
+  - `high`: the change edits a migration, the schema, an RLS policy, a grant,
+    `withTenant` or `DatabaseService`, the auth guard or how the user is
+    identified, the LLM prompt, its output schema or the provider, or it
+    deletes or moves data in a way that is hard to undo.
+  - `medium`: new or changed behaviour across files or packages that follows
+    patterns the code already has. That includes an endpoint with ownership or
+    status checks inside `withTenant`, and a form that reuses the existing
+    Suggest fields call. Example: "edit a draft request" is `medium`.
+  - `low`: one contained change that is easy to verify, such as copy,
+    styling, one component, docs or tests only.
+
+  When torn between two levels, check the `high` list: if the change edits
+  nothing on it, it is `medium`. Say in `## Why` which item made it `high`.
 - **Surfaces**, any of:
   - `api`: NestJS endpoints, services or DTOs change;
   - `ui`: a user will see the change on a page;

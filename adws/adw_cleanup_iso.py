@@ -26,6 +26,7 @@ load_dotenv()
 
 from adw_modules import gh, roles, worktrees  # noqa: E402
 from adw_modules.logs import setup_logger  # noqa: E402
+from adw_modules.pipeline import stop_ports  # noqa: E402
 from adw_modules.state import ADWState  # noqa: E402
 
 SCRIPT = "adw_cleanup_iso"
@@ -46,7 +47,10 @@ def main() -> int:
     if pr_state == "OPEN":
         print(f"PR #{pr} is still open: review and merge it (or close it) first.")
         return 1
-    worktrees.remove(adw_id)
+    stop_ports(state)  # a dev server left running holds the worktree's files
+    removed = worktrees.remove(adw_id)
+    if not removed:
+        logger.warning(f"trees/{adw_id} is still there (see the message above); the rest of the cleanup goes on")
     if state.get("branch_name"):
         subprocess.run(["git", "branch", "-D", state.get("branch_name")], capture_output=True, text=True,
                        cwd=str(roles.REPO))
@@ -54,7 +58,7 @@ def main() -> int:
     stage = "merged" if pr_state == "MERGED" else "closed"
     state.update(stage=stage)
     state.save(SCRIPT)
-    logger.info(f"Run {adw_id}: {stage}. Worktree and local branch removed.")
+    logger.info(f"Run {adw_id}: {stage}. {'Worktree and local' if removed else 'Local'} branch removed.")
     return 0
 
 

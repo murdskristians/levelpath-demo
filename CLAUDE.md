@@ -90,7 +90,7 @@ For behaviour, run the app on your ports and exercise the acceptance criteria (t
 
 ## graphify
 
-A code graph of `main` (files, symbols and the links between them), kept only in the main checkout at `graphify-out/` (git-ignored). Chris rebuilds it with `graphify update .` after a merge; job worktrees never have one.
+A code graph of `main` (files, symbols and the links between them), kept only in the main checkout at `graphify-out/` (git-ignored). graphify's git hooks rebuild it after every commit, checkout, merge and pull there (set up once with `graphify hook install`; after that, undo the line it adds to `.gitattributes`: `graph.json` isn't tracked). The hooks skip job worktrees, which never have a graph. Without a graph, the planner and builder aren't held to it, and the `graph_first` hook warns once per agent.
 
 Rules:
 

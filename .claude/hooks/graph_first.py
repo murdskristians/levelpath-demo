@@ -2,9 +2,10 @@
 """PreToolUse hook of the planner and the builder: query the code graph before reading code.
 
 Wired in the two roles' frontmatter (`.claude/agents/planner.md`, `builder.md`), so it
-runs for them in every driver and for no other agent. It does nothing unless
-`<main checkout>/graphify-out/graph.json` exists: without a graph, the hook is
-inert.
+runs for them in every driver and for no other agent. It enforces nothing unless
+`<main checkout>/graphify-out/graph.json` exists. Without a graph, it warns once per
+agent (a `systemMessage` for the person watching) that the agents aren't using
+graphify, and allows everything.
 
 With the graph, the agent's first look at source code (`apps/`, `packages/`, `db/`)
 is blocked until it has run one `graphify query`, `explain` or `path`. The reason it
@@ -20,12 +21,43 @@ import json
 import os
 import re
 import sys
+import tempfile
 import time
 from pathlib import Path
 
 CODE = re.compile(r"(^|[\\/\s\"'=])(apps|packages|db)([\\/]|$)")
 READERS = re.compile(r"(^|[;&|(]\s*|\s)(cat|head|tail|sed|grep|rg|find|ls|less|more|awk|type|Get-Content|Select-String)\b")
 QUERY = re.compile(r"(^|[;&|(]\s*|\s)graphify\s+(query|explain|path)\b")
+
+
+def reads_code(tool, inp):
+    """Whether this tool call reads or searches source code."""
+    if tool == "Read":
+        return bool(CODE.search(inp.get("file_path", "")))
+    if tool in ("Grep", "Glob"):
+        where = f"{inp.get('path', '')} {inp.get('pattern', '')} {inp.get('glob', '')}"
+        if re.search(r"(^|[\\/\s])(agents|factory|docs|\.claude)[\\/]", where):
+            return False
+        return bool(CODE.search(where)) or not inp.get("path")
+    if tool == "Bash":
+        cmd = inp.get("command", "")
+        return bool(READERS.search(cmd)) and bool(CODE.search(cmd))
+    return False
+
+
+def warn_no_graph(key, out):
+    """Once per agent: say the graph is missing, so a stale setup doesn't go unnoticed."""
+    marker = Path(tempfile.gettempdir()) / "graph-first-warned" / key
+    if marker.exists():
+        return
+    try:
+        marker.parent.mkdir(parents=True, exist_ok=True)
+        marker.write_text("warned\n", encoding="utf-8")
+    except OSError as err:
+        print(f"graph_first: can't write the warning marker: {err}", file=sys.stderr)
+    print(json.dumps({"systemMessage": f"graph_first: no code graph at {out.as_posix()}/graph.json, so the "
+                                       f"planner and builder aren't using graphify. Run `graphify update .` "
+                                       f"in the main checkout to build it."}))
 
 
 def main():
@@ -36,12 +68,14 @@ def main():
         return 0
     root = Path(os.environ.get("CLAUDE_PROJECT_DIR") or event.get("cwd") or ".")
     out = root / "graphify-out"
-    if not (out / "graph.json").exists():
-        return 0  # no graph: the hook is inert
     tool, inp = event.get("tool_name", ""), event.get("tool_input") or {}
     # One query per agent: subagents share their parent's session_id, so the role name is part of the key
     who = event.get("agent_id") or f"{event.get('session_id') or 'unknown'}-{event.get('agent_type') or 'main'}"
     key = re.sub(r"[^\w.-]", "_", str(who))
+    if not (out / "graph.json").exists():
+        if reads_code(tool, inp):
+            warn_no_graph(key, out)
+        return 0  # no graph: nothing to enforce
     marker = out / ".graph-first" / key
 
     def log(action):
@@ -58,21 +92,7 @@ def main():
         marker.write_text("queried\n", encoding="utf-8")
         log("query")
         return 0
-    if marker.exists():
-        return 0
-    if tool == "Read":
-        reads_code = bool(CODE.search(inp.get("file_path", "")))
-    elif tool in ("Grep", "Glob"):
-        where = f"{inp.get('path', '')} {inp.get('pattern', '')} {inp.get('glob', '')}"
-        reads_code = bool(CODE.search(where)) or not inp.get("path")
-        if re.search(r"(^|[\\/\s])(agents|factory|docs|\.claude)[\\/]", where):
-            reads_code = False
-    elif tool == "Bash":
-        cmd = inp.get("command", "")
-        reads_code = bool(READERS.search(cmd)) and bool(CODE.search(cmd))
-    else:
-        reads_code = False
-    if not reads_code:
+    if marker.exists() or not reads_code(tool, inp):
         return 0
     log("blocked")
     print(f"graph_first: this repo has a code graph. Find the code with it before reading or searching "

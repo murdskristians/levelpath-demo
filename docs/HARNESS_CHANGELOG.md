@@ -640,3 +640,29 @@ Format:
   - **Approver role:** says the reply is never read, so the file is all that counts.
   - **`/review`:** stops and asks for `/verify <slug>` when the round has no `review-verify.md` for the current code.
 - **Why this prevents a repeat:** the agents' files stay the only answer (nothing is parsed from prose). A missing file now gets one retry, as the builder's and reviewers' files already did. In L1, the verifier can no longer be skipped by running the steps out of order.
+
+## 2026-11-27: seven fixes from a review of the whole harness
+
+- **What went wrong:** a review after the graphify test found seven problems. Each one either happened in the test runs or was confirmed in the code:
+  1. **Inconsistent risk:** intake rated the same task `high` twice and `medium` three times. `high` means Opus and a scout, so the same task cost $6–7 instead of $2–2.5. The rule listed "auth" and "the LLM prompt", which a task that only _reuses_ them could match.
+  2. **Harness tests outside the gate:** `checks.sh` ran only the app's checks. With no CI, a PR that broke the guard, the factory scripts or the ADW pipeline still passed. The pipeline had no tests.
+  3. **The graph went stale or missing silently:** it was rebuilt only when Chris remembered, and without it the `graph_first` hook did nothing, with no message.
+  4. **Worktree cleanup failed on Windows:** removal hit WinError 32 (a file still in use) every time and left the folder. The ADW cleanup crashed with a traceback.
+  5. **Issue titles:** the control room used the pasted intent's first line as is (`# Intent: …`).
+  6. **A guard false positive:** the guard blocked `git merge-base` as a merge into `main`.
+  7. **`uv.lock` in the root:** `uv run` created it next to the root `pyproject.toml`.
+- **Before:** as above.
+- **After:**
+  1. `intake.md` rates risk by what the change **edits**, with a concrete `high` list and the edit-draft example as `medium`. Intake says in its `## Why` which item made a job `high`.
+  2. `checks.sh` runs `test_hooks.py`, `factory/tests/run_test.py` and the new `adws/adw_tests/test_pipeline.py` when the branch changes `.claude/`, `factory/` or `adws/`. That takes about three minutes, so app-only rounds skip it.
+  3. `graphify hook install` in the main checkout (git hooks; they skip job worktrees). `graph_first.py` warns once per agent when there's no graph.
+  4. `job` and `adws/adw_modules/worktrees.py` retry the delete four times, 5 seconds apart. `adw_cleanup_iso.py` stops the run's ports first and reports a leftover folder instead of crashing.
+  5. `serve` strips the `#` and the `Intent:`.
+  6. The guard matches `git merge` only, not `merge-base` or `merge-tree`.
+  7. `uv.lock` is git-ignored.
+- **Why this prevents a repeat:**
+  - The risk rule no longer depends on how intake reads a word.
+  - The harness's tests run on every harness change.
+  - The graph keeps itself current, and its absence is visible.
+  - Cleanup no longer depends on Windows' timing.
+  - Each of the small fixes has a test.

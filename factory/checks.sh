@@ -28,3 +28,21 @@ pnpm install --frozen-lockfile --prefer-offline
 pnpm build
 pnpm lint
 pnpm test
+
+# The harness's own tests (the hooks, the factory scripts, the ADW pipeline) run when
+# the branch changes the harness. There is no CI, so this is the only place they run
+# on their own; they take about three minutes, which app-only rounds don't pay.
+# Committed changes since the branch left main, uncommitted ones (L1) and new files.
+base=origin/main
+if git rev-parse -q --verify "$base" >/dev/null; then
+  harness=$({ git diff --name-only "$base"...HEAD; git diff --name-only HEAD; git ls-files --others --exclude-standard; } |
+    grep -E '^(\.claude|factory|adws)/' || true)
+else
+  harness="unknown base: run them"
+fi
+if [ -n "$harness" ]; then
+  echo "checks: the branch changes the harness; running its tests"
+  python3 -X utf8 .claude/hooks/test_hooks.py
+  python3 -X utf8 factory/tests/run_test.py
+  python3 -X utf8 adws/adw_tests/test_pipeline.py
+fi

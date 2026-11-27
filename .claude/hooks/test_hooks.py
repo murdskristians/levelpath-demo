@@ -127,6 +127,9 @@ for cmd in ["gh pr merge 3", "gh pr merge 3 --squash --admin", "cd x && gh pr me
 expect("`git push` on main", True, "Bash", command="git push")
 expect("`git push origin` on main", True, "Bash", command="git push origin")
 expect("`git merge feature` on main", True, "Bash", command="git merge feature")
+expect("`git merge --no-ff feature` on main", True, "Bash", command="git merge --no-ff feature")
+expect("`git merge-base main HEAD` on main (read-only)", False, "Bash", command="git merge-base main HEAD")
+expect("`git merge-tree` on main (read-only)", False, "Bash", command="git merge-tree main feature")
 expect("`git push -u origin factory/001-x` from the job worktree", False, "Bash", cwd=FW,
        command="git push -u origin factory/001-x")
 expect("`git push` from a job worktree (its own branch)", False, "Bash", command=f"cd {FW} && git push")
@@ -199,8 +202,26 @@ def gf(tool, agent="planner", **inp):
     return "block" if code == 2 else "allow" if code == 0 else f"error {code}: {err[:200]}"
 
 
-check("graph_first: without a graph, reading code is allowed (the 'without' side)",
+check("graph_first: without a graph, reading code is allowed",
       gf("Read", file_path=f"{G}/apps/api/src/x.ts") == "allow")
+
+
+def gf_stdout(tool, key, **inp):
+    res = subprocess.run([sys.executable, "-X", "utf8", str(GF)], capture_output=True, text=True, cwd=gbox,
+                         input=json.dumps({"tool_name": tool, "tool_input": inp, "cwd": G, "agent_id": key}),
+                         env=dict(os.environ, CLAUDE_PROJECT_DIR=G))
+    return res.returncode, res.stdout
+
+
+nokey = f"test-{os.getpid()}"
+code, out = gf_stdout("Read", nokey, file_path=f"{G}/apps/api/src/x.ts")
+check("graph_first: without a graph, warns once that agents aren't using it",
+      code == 0 and "systemMessage" in out and "graphify update" in out, f"exit {code}: {out[:200]}")
+code, out = gf_stdout("Read", nokey, file_path=f"{G}/apps/api/src/y.ts")
+check("graph_first: the warning isn't repeated for the same agent", code == 0 and out.strip() == "", out[:200])
+code, out = gf_stdout("Read", f"{nokey}-docs", file_path=f"{G}/docs/README.md")
+check("graph_first: no warning for a call that doesn't read code", code == 0 and out.strip() == "", out[:200])
+(Path(tempfile.gettempdir()) / "graph-first-warned" / nokey).unlink(missing_ok=True)
 (gbox / "graphify-out").mkdir()
 (gbox / "graphify-out/graph.json").write_text("{}")
 for name, tool, inp in [("Read apps/…", "Read", {"file_path": f"{G}/apps/api/src/x.ts"}),
