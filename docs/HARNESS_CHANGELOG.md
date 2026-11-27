@@ -804,3 +804,22 @@ Format:
   - factory checks 66, up 5: the hook on an L3-shaped transcript, the job time kept through the merge, and a PR closed on GitHub (3 checks). The first two fail on the old code.
   - pipeline 17, up 1: a stop at the gate is handed over, and a parked stop passes through.
 - **Why this prevents a repeat:** each finding came from running the part, and each fix has a test that fails on the old code.
+
+## 2026-11-28: The Agents tab showed a hook's "no" as a red error
+
+- **What went wrong:** In the demo rehearsal run `78d872a3`, the Agents tab showed two red `error` lines in the planner. Chris asked what was wrong. Nothing was:
+  - one was the `graph_first` hook blocking a file listing before the planner's first graph query, which is the hook working;
+  - the other was a command that printed all its output and then exited 2, because its last `ls` pattern matched no files.
+
+  Claude Code marks both as tool errors, and `serve` passed that flag straight through.
+
+- **Before:** every `is_error` tool result was an `error`, in red.
+- **After:** `serve`'s `result_event()` sorts them:
+  - a hook block is `blocked`, in amber, labelled with the hook's name (`graph_first: …`, `guard: …`);
+  - a non-zero exit that printed output is `exit N`, in grey, with the output;
+  - everything else stays a red `error` (for example, a read of a missing file, or a bare `Exit code 1`).
+
+  Both drivers' transcripts go through the same function.
+
+- **Tests:** factory checks 73, up 7, from the texts in the run's logs. Classifying every log from the last three runs found 3 hook blocks, 2 exits and 2 real errors (reads of missing files).
+- **Why this prevents a repeat:** red means something failed, so a person watching a run isn't sent after the harness doing its job.

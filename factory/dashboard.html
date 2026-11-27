@@ -281,6 +281,8 @@
   .ev.text .tx, .ev.prompt .tx { color: var(--text); }
   .ev.tool .k { color: var(--active); }
   .ev.error .k, .ev.error .tx { color: var(--human); }
+  .ev.blocked .k, .ev.blocked .tx { color: var(--changes); }
+  .ev.exit .k { color: var(--muted); }
   .ev.done .k { color: var(--pass); }
   .fb { padding: 12px 18px; border-top: 1px solid var(--line); display: flex; gap: 10px; flex-wrap: wrap; }
   .fb textarea {
@@ -722,8 +724,9 @@ function setTab(tab) {
 }
 
 function eventRow(e) {
-  const label = { text: 'says', prompt: 'prompt', result: '→', error: 'error', done: 'done' }[e.kind] || e.name || e.kind
-  return `<div class="ev ${esc(e.kind)}"><span class="k" title="${esc(label)}">${esc(label)}</span><span class="tx">${esc(e.text)}</span></div>`
+  const label = { text: 'says', prompt: 'prompt', result: '→', error: 'error', blocked: 'blocked', done: 'done' }[e.kind] || e.name || e.kind
+  const tip = e.kind === 'blocked' ? `blocked by the ${e.name} hook` : e.kind === 'exit' ? `the command ran and printed this, but exited non-zero (${e.name})` : label
+  return `<div class="ev ${esc(e.kind)}"><span class="k" title="${esc(tip)}">${esc(label)}</span><span class="tx">${esc(e.text)}</span></div>`
 }
 
 // The run's agents, newest last, with the orchestrator first; the selected one's events stream in.
