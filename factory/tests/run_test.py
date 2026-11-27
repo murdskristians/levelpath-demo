@@ -418,6 +418,41 @@ for line, want in [("# Intent: Edit a draft purchase request", "Edit a draft pur
                    ("# ", "#")]:
     check(f"control room issue title from {line!r}", serve.issue_title(line) == want, serve.issue_title(line))
 
+# ---- 11b. the control room's Agents tab for a factory job (section 8's transcripts) ----
+serve.JOBS = proj / "factory/jobs"
+serve.JOB.transcripts_dir = lambda: BOX / "claude-config/projects" / proj_key
+try:
+    shown = [a["key"] for a in serve.agents_of(jid)["agents"]]
+    check("Agents tab: the job's agent is listed, an earlier job's agent with the same id is not",
+          shown == ["agent-1"], shown)
+except Exception as e:  # noqa: BLE001 - report it as a failed check, keep running
+    check("Agents tab: the job's agents load", False, f"{type(e).__name__}: {e}")
+try:
+    serve.give_feedback("adw-nosuchrun", "x")
+    check("feedback for an unknown run is refused", False, "no error")
+except ValueError as e:
+    check("feedback for an unknown run is refused", "No such run" in str(e), str(e))
+
+import http.client  # noqa: E402  (not urllib: with SSLKEYLOGFILE set it loads OpenSSL, which crashes on Windows)
+import threading  # noqa: E402
+
+
+def broken(run_id):
+    raise TypeError("a bug")
+
+
+serve.agents_of = broken
+httpd = serve.ThreadingHTTPServer(("127.0.0.1", 0), serve.Handler)
+threading.Thread(target=httpd.serve_forever, daemon=True).start()
+conn = http.client.HTTPConnection("127.0.0.1", httpd.server_port, timeout=10)
+conn.request("GET", "/api/agents?run=x", headers={"Host": "127.0.0.1"})
+res = conn.getresponse()
+status, body = res.status, res.read().decode("utf-8")
+conn.close()
+check("a control room bug answers 500 with the error, not a dropped connection",
+      status == 500 and "TypeError: a bug" in body, f"{status} {body}")
+httpd.shutdown()
+
 os.chdir(BOX)
 print(f"\n{ok} passed, {fail} failed")
 sys.exit(1 if fail else 0)
