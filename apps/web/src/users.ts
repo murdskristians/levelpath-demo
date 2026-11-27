@@ -29,10 +29,19 @@ export const USERS = [
 const KEY = 'levelpath.userId';
 
 export function loadUserId(): string | null {
-  const id = localStorage.getItem(KEY);
-  return USERS.some((u) => u.id === id) ? id : null;
+  try {
+    const id = localStorage.getItem(KEY);
+    return USERS.some((u) => u.id === id) ? id : null;
+  } catch (err) {
+    console.warn('users: could not read the stored user', err);
+    return null;
+  }
 }
 
 export function saveUserId(id: string): void {
-  localStorage.setItem(KEY, id);
+  try {
+    localStorage.setItem(KEY, id);
+  } catch (err) {
+    console.warn('users: could not store the user', err);
+  }
 }

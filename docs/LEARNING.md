@@ -213,6 +213,12 @@ One entry per new concept: what it is, why it matters, where it lives in this re
 - **Why it matters:** A purchase description can hold names, prices or anything a user pastes. The hash still lets you see that the same text failed three times, and the length and latency explain most problems, without the log becoming a second copy of user data.
 - **Where:** the `llm_suggestion` line at the end of `suggest` in [suggestions.service.ts](../apps/api/src/suggestions/suggestions.service.ts); the log tests in [suggestions.service.spec.ts](../apps/api/src/suggestions/suggestions.service.spec.ts).
 
+## Theme without a flash
+
+- **What:** The web app's light/dark toggle keeps the choice in localStorage (`levelpath.theme`). A tiny inline script in the `<head>` of `index.html` sets `data-theme` on `<html>` before first paint, from the stored value or else the OS (`prefers-color-scheme`); React then starts from that attribute. All colours are CSS custom properties, switched by `:root[data-theme='dark']`.
+- **Why it matters:** If React set the theme after it loaded, a dark-mode user would see a white flash on every reload. A stored choice beats the OS, so the user can override it; and only the exact values `light` and `dark` are used, so stored text never reaches the page.
+- **Where:** [index.html](../apps/web/index.html), [theme.ts](../apps/web/src/theme.ts), the token blocks at the top of [App.css](../apps/web/src/App.css); tests in [theme.test.ts](../apps/web/src/theme.test.ts), including the WCAG contrast check.
+
 ## A code graph for agents: graphify
 
 - **What:** [graphify](https://github.com/Graphify-Labs/graphify) parses the repo into a graph of files, symbols and the links between them (`graphify update .`, no LLM). Agents ask it with `graphify query "<question>"`, `explain` and `path` instead of grepping and reading whole files. Hooks in `.claude/settings.json` remind every agent before a Grep, Read, Glob or Bash call; they never block one.

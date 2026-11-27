@@ -30,6 +30,7 @@ describe('App', () => {
     vi.useRealTimers();
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
+    delete document.documentElement.dataset.theme;
   });
 
   describe('shell', () => {
@@ -659,6 +660,109 @@ describe('App', () => {
       await screen.findByRole('alert');
       expect(screen.queryByText('Laptops')).toBeNull();
       expect(screen.queryAllByRole('listitem')).toHaveLength(0);
+    });
+  });
+
+  describe('theme', () => {
+    const THEME = 'levelpath.theme';
+    const stubOs = (dark: boolean) =>
+      vi.stubGlobal('matchMedia', (q: string) => ({ matches: dark && q.includes('dark') }));
+    const toggle = () =>
+      within(screen.getByRole('banner')).getByRole('button', { name: 'Dark theme' });
+    const attr = () => document.documentElement.dataset.theme;
+
+    beforeEach(() => mockFetch(base(ALICE)));
+    afterEach(() => {
+      delete document.documentElement.dataset.theme;
+    });
+
+    it('follows the OS on a first visit', () => {
+      stubOs(true);
+      render(<App />);
+      expect(attr()).toBe('dark');
+      expect(toggle().getAttribute('aria-pressed')).toBe('true');
+    });
+
+    it('is light when the OS is light or matchMedia is missing', () => {
+      stubOs(false);
+      render(<App />);
+      expect(attr()).toBe('light');
+      expect(toggle().getAttribute('aria-pressed')).toBe('false');
+      cleanup();
+      delete document.documentElement.dataset.theme;
+      vi.stubGlobal('matchMedia', undefined);
+      render(<App />);
+      expect(attr()).toBe('light');
+    });
+
+    it('flips and stores the theme on click', () => {
+      stubOs(false);
+      render(<App />);
+      fireEvent.click(toggle());
+      expect(attr()).toBe('dark');
+      expect(toggle().getAttribute('aria-pressed')).toBe('true');
+      expect(localStorage.getItem(THEME)).toBe('dark');
+      fireEvent.click(toggle());
+      expect(attr()).toBe('light');
+      expect(localStorage.getItem(THEME)).toBe('light');
+    });
+
+    it('prefers the stored theme over the OS and ignores invalid values', () => {
+      stubOs(false);
+      localStorage.setItem(THEME, 'dark');
+      render(<App />);
+      expect(attr()).toBe('dark');
+      cleanup();
+      delete document.documentElement.dataset.theme;
+      stubOs(true);
+      localStorage.setItem(THEME, 'light');
+      render(<App />);
+      expect(attr()).toBe('light');
+      cleanup();
+      delete document.documentElement.dataset.theme;
+      localStorage.setItem(THEME, 'blue');
+      render(<App />);
+      expect(attr()).toBe('dark');
+    });
+
+    it('keeps the theme across a remount and a user switch', () => {
+      stubOs(false);
+      renderAs(ALICE);
+      fireEvent.click(toggle());
+      cleanup();
+      delete document.documentElement.dataset.theme;
+      render(<App />);
+      expect(attr()).toBe('dark');
+
+      mockFetch(base(AMIR));
+      fireEvent.change(screen.getByLabelText('User'), { target: { value: AMIR } });
+      expect(attr()).toBe('dark');
+      expect(localStorage.getItem(THEME)).toBe('dark');
+      expect(localStorage.getItem(KEY)).toBe(AMIR);
+    });
+
+    it('is in the header with and without a user', () => {
+      render(<App />);
+      expect(toggle()).toBeTruthy();
+      expect(within(screen.getByRole('banner')).getByLabelText('User')).toBeTruthy();
+      fireEvent.change(screen.getByLabelText('User'), { target: { value: ALICE } });
+      expect(toggle()).toBeTruthy();
+      expect(within(screen.getByRole('banner')).getByLabelText('User')).toBeTruthy();
+    });
+
+    it('still switches, and warns, when storage throws', () => {
+      stubOs(false);
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+        throw new Error('denied');
+      });
+      vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+        throw new Error('denied');
+      });
+      render(<App />);
+      fireEvent.click(toggle());
+      expect(attr()).toBe('dark');
+      expect(warn).toHaveBeenCalled();
     });
   });
 
