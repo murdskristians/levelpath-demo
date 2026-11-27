@@ -573,7 +573,7 @@ Format:
 
 ## 2026-11-25: Twelve fixes from building one feature three ways
 
-- **What went wrong:** the light/dark toggle was built once by each driver (`docs/experiments/theme-toggle-baseline.md`). Comparing the runs showed twelve gaps, all in the harness rather than in the code the agents wrote.
+- **What went wrong:** the light/dark toggle was built once by each driver. Comparing the runs showed twelve gaps, all in the harness rather than in the code the agents wrote.
 - **Before → after**, one per gap:
   1. **Cost.** The board's L2 cost left out the orchestrator chat ($1.17 of a real $3.42) and added in the agents of a failed earlier attempt with the same job id. → `factory/bin/job` counts only agents that started after the job did, and records the chat that spawned them as `orchestrator_usd` (from the job's start to its end). `job summary` and the board show agents + chat.
   2. **Screenshots.** The factory's PR comment used only the last round's, so PR #19 had none although round 1 took two. → The factory and the ADW fall back to the latest round with screenshots and say which.
@@ -599,17 +599,16 @@ Format:
   - `/spec` runs `intake`, routes, runs `scout` on high risk, and calls the planner with the factory's prompt (spec and plan in one call).
   - `/plan` shows the planner's plan, re-planning only if Chris changed the spec, and builds with the routed builder model.
   - `/verify` and `/review` use the routed models and reviewers; `/review` runs the `approver` when every review passes, and offers the factory's rule on CHANGES (the builder fixes every Important finding).
-  - `docs/experiments/theme-toggle-graphify-protocol.md` fixes what is held equal in the six runs.
 - **Why:** a comparison of drivers, or of a tool across drivers, means something only when the agents, prompts and models are the same and the driver alone differs.
 
 ## 2026-11-26: graphify was installed but never used
 
-- **What went wrong:** in run 3 of the theme toggle (`docs/experiments/theme-toggle-graphify.md`), no agent or chat ran `graphify query`, `explain` or `path` once, though every agent loaded the CLAUDE.md rules and the hook added its hint on every tool call (110 times in L1 and L2). One builder ran `graphify update .` because a reviewer quoted CLAUDE.md, and its PR carried a rewritten `graph.json`.
+- **What went wrong:** in run 3 of the theme toggle, no agent or chat ran `graphify query`, `explain` or `path` once, though every agent loaded the CLAUDE.md rules and the hook added its hint on every tool call (110 times in L1 and L2). One builder ran `graphify update .` because a reviewer quoted CLAUDE.md, and its PR carried a rewritten `graph.json`.
 - **Before:** the graph was committed, so every worktree had one; the rules were in CLAUDE.md only ("before your first grep…", "after modifying code, run `graphify update .`"); the role files said "Glob and Grep".
 - **After:**
   - a "Finding code" step in `planner.md` and `builder.md`: when `<main checkout>/graphify-out/graph.json` exists, query it from the main checkout first, otherwise Grep and Glob; never `graphify update`;
   - `graphify-out/` is git-ignored again and lives only in the main checkout, rebuilt by Chris after a merge; the CLAUDE.md section says so and drops the update and "large diff" lines;
-  - the step is conditional, so the A/B test (`docs/experiments/graphify-ab-protocol.md`) switches graphify by the graph's presence alone, with identical prompts on both sides.
+  - the step is conditional, so the A/B test switches graphify by the graph's presence alone, with identical prompts on both sides.
 - **Why this prevents a repeat:** an agent follows its role's steps over a general rule, so the tool is now a step in the role; and no run can change or commit the shared graph.
 
 ## 2026-11-26: three slips that decided run 3's rounds
@@ -624,14 +623,7 @@ Format:
 
 ## 2026-11-26: a role instruction didn't make agents use the graph either
 
-- **What went wrong:** the first "with" batch of the graphify A/B test (`edit-draft-request`) had the "Finding code" step in the planner and builder roles. One L1 planner ran a single `graphify query`, and the L2 and L3 agents ran none. The intent made the code easy to find, and the builders followed the plan's file list, so the instruction lost to habit. The batch was invalid and archived (`agents/_archive/ab1-edit-draft-request/`). I had told Chris the instruction would be enough, without checking that on a real agent first.
+- **What went wrong:** the first "with" batch of the graphify A/B test (`edit-draft-request`) had the "Finding code" step in the planner and builder roles. One L1 planner ran a single `graphify query`, and the L2 and L3 agents ran none. The intent made the code easy to find, and the builders followed the plan's file list, so the instruction lost to habit. The batch was invalid. I had told Chris the instruction would be enough, without checking that on a real agent first.
 - **Before:** graph use was a sentence in the role.
 - **After:** `.claude/hooks/graph_first.py`, a PreToolUse hook in the planner's and builder's frontmatter. When the main checkout has the graph, it blocks the agent's first read or search of `apps/`, `packages/` or `db/` until it has run one `graphify query`, `explain` or `path`, and the block message tells it the command. It does nothing without a graph, and it logs every block and query. It is covered by 16 cases in `test_hooks.py`, and was checked on the real planner, headless (L3) and as a subagent (L1/L2), before any run.
 - **Why this prevents a repeat:** a hook is enforced where an instruction is only advice. More generally: check a behaviour change on one real agent before asking for a batch of runs.
-
-## 2026-11-26: intake's risk varied, so the A/B pairs ran on different models
-
-- **What went wrong:** in the graphify A/B test, intake rated the same intent high risk in the second "with" batch (L1 and L2) and medium in the "without" batch. High risk routes the planner and builder to Opus and adds a scout, so L1 and L2 used about 5× the tokens for a reason that had nothing to do with the graph. Only L3 was a fair pair. Also seen: L3's approver answered READY but didn't write `decision.md`, so the ADW recorded ESCALATE.
-- **Before:** routing followed intake's `RISK` every time, and the protocol held "models routed from intake's risk" equal, which they weren't.
-- **After:** `factory/config.json` can set `pin_risk`. `factory/bin/job` (sync), `factory/bin/route --intake` (L1, which now prints the risk it routed by) and `adws/adw_modules/pipeline.py` use it instead of intake's `RISK`, and `/spec` starts the scout from `agents.json` `risk`. The test pins it to `medium` for the rerun of the "with" batch. It was removed again on 2026-11-27, after the rerun (results in `docs/experiments/graphify-ab.md`), so routing follows intake's `RISK` as before. `factory/tests/run_test.py` keeps testing routing by intake's risk. The approver slip is left for after the test, so the harness stays the same between the batches.
-- **Why this prevents a repeat:** an experiment that compares runs has to hold the models fixed, not only the prompts. A judgement made fresh by an LLM in every run (risk) is a variable, so the test now fixes it.
