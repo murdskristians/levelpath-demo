@@ -37,7 +37,6 @@
       "Bash(graphify path:*)",
       "Bash(graphify explain:*)",
       "Bash(graphify section:*)",
-      "Bash(graphify update:*)",
       "Bash(factory/bin/port:*)"
     ],
     "deny": [
