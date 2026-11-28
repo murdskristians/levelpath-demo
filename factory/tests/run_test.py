@@ -572,9 +572,11 @@ for text, is_error, kind, name, shown in cases:
 # `sleep N`, and run 72430acb's verifier lost a step to `sleep 25 && curl …`.
 for role in ["builder", "verifier"]:
     body = (SRC / ".claude/agents" / f"{role}.md").read_text(encoding="utf-8")
+    # The Bash tool cuts a command off after 2 minutes unless the call sets a longer
+    # timeout, so a 5-minute wait needs one; -m 10 retries an attempt that hangs.
     check(f"the {role} role waits up to 5 minutes for the app with curl's retries, not sleep",
-          "--retry-connrefused" in body and "--retry-max-time 300" in body
-          and not re.search(r"`[^`]*\bsleep \d", body), role)
+          "--retry-connrefused" in body and "--retry-max-time 300" in body and "-m 10" in body
+          and "360000" in body and not re.search(r"`[^`]*\bsleep \d", body), role)
 builder_md = (SRC / ".claude/agents/builder.md").read_text(encoding="utf-8")
 check("the builder runs checks.sh with the 10-minute Bash timeout and has a 20-minute Stop hook",
       "600000" in builder_md and "timeout: 1200" in builder_md)

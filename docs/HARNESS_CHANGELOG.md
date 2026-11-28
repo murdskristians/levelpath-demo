@@ -878,6 +878,10 @@ Format:
   - **Health check:** it said "all good" with Docker stopped. It now checks Postgres (`gate --services`).
   - **`checks.md`:** it showed terminal colour codes (`[32m✓[39m`) in the Files tab. The gate strips them from `checks.log`, `checks.md` and the builder's hook message.
   - **Timeouts:** the builder's checks run could hit Claude Code's 2-minute Bash default (once in 7 runs it set no timeout). The role now asks for `600000` ms. Its Stop hook gets an explicit `timeout: 1200`; a headless probe of the builder agent showed the hook loads and runs.
+  - **Found in the review of this PR:**
+    - **The 5-minute wait was really 2.** The Bash tool cuts a command off after 2 minutes unless the call sets a longer timeout. The roles now give the wait `360000` ms.
+    - **A hung connection.** A server that accepts the connection and never answers would hold one curl attempt forever. `-m 10` ends each attempt, and the retry carries on. Tested: against a server that holds connections for 8 s, curl returned 200 after 11 s.
+    - **Tests in a fix round.** The builder runs `pnpm --filter @levelpath/api test` in a round that answers reviews, and those tests take 2–5 minutes, so the role asks for `600000` ms there too. So does the verifier, for a test it runs itself.
   - **README:** it said the PR gets the `factory:needs-human` label. The issue does.
 - **Left for after the demo:** the apps that agents start in worktrees (builder, verifier, `/try`) use the dev database. Nothing was written to it so far, but a feature with a migration, or one that creates requests, would change Chris's demo data. The fix is a database per run.
 - **Tests:** factory checks 86, up 2 (colour codes stripped; the builder's two timeouts). Hooks 168 and pipeline 19 unchanged.

@@ -104,7 +104,8 @@ changes in the worktree. With the graph, a hook blocks your first read of
   `pnpm --filter <package> build` and `pnpm --filter <package> test` for each
   package you touched (`@levelpath/web`, `@levelpath/api`,
   `@levelpath/shared`). The gate runs the full `checks.sh` right after you, so
-  a full run here only doubles the wait.
+  a full run here only doubles the wait. The API tests alone take 2 to 5
+  minutes: give them the `600000` ms timeout too.
 
 Then verify every acceptance criterion and record the evidence in build.md: the
 command and its result, or what the page showed.
@@ -115,9 +116,10 @@ command and its result, or what the page showed.
   without it its proxy reaches port 3000, the main checkout's API, not yours.
   Wait until they answer with curl's own retries, never with `sleep` (Claude
   Code blocks a bare `sleep N`):
-  `curl --retry 100 --retry-max-time 300 --retry-connrefused --retry-delay 2 -sf localhost:<a>/health`
-  (the API takes 1 to 2 minutes to compile and start; this allows 5)
-  and the same for `localhost:<w>/`. Look at pages with the `agent-browser` CLI (run
+  `curl --retry 100 --retry-max-time 300 --retry-connrefused --retry-delay 2 -m 10 -sf localhost:<a>/health`
+  and the same for `localhost:<w>/`. The API takes 1 to 2 minutes to compile
+  and start; this waits up to 5, so give the Bash call a `360000` ms timeout
+  (the 2-minute default would cut it off). Look at pages with the `agent-browser` CLI (run
   `agent-browser skills get core` first), passing `--session <job>-builder` on
   every call. When done: `agent-browser --session <job>-builder close`, then
   stop only your own servers with `<main checkout>/factory/bin/port stop <a>`
