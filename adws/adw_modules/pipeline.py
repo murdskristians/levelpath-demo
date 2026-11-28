@@ -86,6 +86,17 @@ def start(issue_number: str, adw_id: Optional[str], script: str, logger_factory)
     return state, logger_factory(adw_id)
 
 
+def require_services() -> None:
+    """Postgres (config.json `gate_services`) must be up before the agents start. Without
+    this check, a run started with Docker stopped spent about 15 minutes and a dollar on
+    intake, the planner and the builder before the gate refused. Raises Stop with what to start."""
+    res = subprocess.run([sys.executable, "-X", "utf8", str(roles.REPO / "factory" / "bin" / "gate"), "--services"],
+                         capture_output=True, text=True, encoding="utf-8")
+    if res.returncode != 0:
+        raise Stop((res.stderr.strip() or res.stdout.strip() or f"gate --services: exit {res.returncode}")
+                   .removeprefix("gate: "))
+
+
 def plan(state: ADWState, logger) -> None:
     """intake → route → worktree → [scout] → planner. Raises Stop when the run waits."""
     adw_id, number = state.get("adw_id"), state.get("issue_number")
@@ -99,6 +110,7 @@ def plan(state: ADWState, logger) -> None:
     worktree = state.get("worktree_path") or str(roles.REPO / "trees" / adw_id)
     state.update(title=issue["title"], branch_name=branch, worktree_path=worktree, stage="intake")
     state.save("intake")
+    require_services()  # a Stop here, at a running stage, is handed over with the reason
     say(state, "ops", f"Starting ADW run `{adw_id}` on branch `{branch}`.")
 
     role(state, logger, "intake", roles.header(state))
@@ -431,6 +443,7 @@ def patch(state: ADWState, logger, feedback: str) -> None:
 
 
 def _patch(state: ADWState, logger, feedback: str) -> None:
+    require_services()  # the run stays waiting, and the feedback unused, until Postgres is up
     d = folder(state)
     k = len(list(d.glob("feedback-*.md"))) + 1
     (d / f"feedback-{k}.md").write_text(f"# Feedback {k}\n\nFrom @{gh.operator()} on the issue.\n\n"

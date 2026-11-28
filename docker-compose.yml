@@ -1,3 +1,11 @@
+# One project name for every checkout. Without it, Compose names the project after the
+# folder, so `pnpm db:up` in a run's worktree (trees/<id>, .worktrees/<job>) made a second
+# Postgres there: it couldn't start while this one holds 5432, and when this one was down
+# the run's tests got an empty database of their own. Now every checkout reaches this one.
+# `pnpm db:up` never recreates it (--no-recreate), so a branch's copy of this file can't
+# replace it; after changing this file, `pnpm db:down && pnpm db:up` applies the change.
+name: levelpath-demo
+
 services:
   db:
     image: postgres:18-alpine

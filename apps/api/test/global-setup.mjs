@@ -3,16 +3,17 @@
  * Vitest global setup: give this test run its own database.
  *
  * Every run (yours, a factory job's, an ADW's, in parallel worktrees) shares one
- * Postgres server but gets a fresh `lp_<random>` database, migrated and seeded as
- * the owner, so runs never see each other's rows. It is dropped when the run ends,
- * passed or failed. The tests reach it as the app role through `inject('testDb')`
- * (test/helpers.ts).
+ * Postgres server but gets a fresh `lp_<start time>_<random>` database, migrated and
+ * seeded as the owner, so runs never see each other's rows. It is dropped when the run
+ * ends, passed or failed. A killed run can't drop its own, so each run first drops those
+ * (test/test-databases.mjs). The tests reach it as the app role through
+ * `inject('testDb')` (test/helpers.ts).
  *
  * Without Postgres the run fails, loudly, and says how to fix it. Database tests
  * are never skipped.
  */
-import { randomBytes } from 'node:crypto';
 import { dbConfig, migrate, ownerClient, seed } from '../db-tools/db-lib.mjs';
+import { dropStaleTestDatabases, testDatabaseName } from './test-databases.mjs';
 
 /** @param {import('vitest/node').TestProject} project */
 export default async function setup(project) {
@@ -27,8 +28,14 @@ export default async function setup(project) {
       { cause: err },
     );
   }
-  const database = `lp_${randomBytes(6).toString('hex')}`;
+  const database = testDatabaseName();
   try {
+    const left = await dropStaleTestDatabases(admin);
+    if (left.length > 0) {
+      console.log(
+        `levelpath: dropped ${left.length} test database(s) left by runs that never finished: ${left.join(', ')}`,
+      );
+    }
     await admin.query(`create database ${admin.escapeIdentifier(database)}`);
   } finally {
     await admin.end();

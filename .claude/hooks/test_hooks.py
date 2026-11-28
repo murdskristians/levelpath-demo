@@ -193,6 +193,20 @@ for rel in [".claude/agents/intake.md", ".claude/commands/spec.md", "docs/templa
     expect(f"edit {rel} (same name, not a run file)", False, "Edit", file_path=f"{M}/{rel}")
 expect("write app code in the ADW worktree", False, "Write", file_path=f"{AW}/apps/web/src/theme.ts")
 
+# 8. the shared dev Postgres
+for cmd in ["pnpm db:down", f"cd {AW} && pnpm db:down", "npm run db:down", "docker compose down",
+            "docker compose down -v", "docker-compose stop db", "docker compose -f docker-compose.yml rm -f db",
+            "docker compose restart", "docker stop levelpath-demo-db-1", "docker ps -q | xargs docker stop",
+            "docker container rm -f levelpath-demo-db-1", "docker volume rm levelpath-demo_pgdata",
+            "docker volume prune -f", "docker system prune -a"]:
+    expect(f"`{cmd}`", True, "Bash", command=cmd)
+expect("PowerShell `docker compose down`", True, "PowerShell", command="docker compose down")
+for cmd in ["pnpm db:up", f"cd {AW} && pnpm db:up", "docker compose up -d --wait --no-recreate db", "docker ps -a",
+            "docker compose ps", "docker compose logs db", "docker volume ls", "docker exec levelpath-demo-db-1 pg_isready",
+            "git rm --cached old.txt", "echo docker is down", "cat docker-compose.yml",
+            "git add docker-compose.yml && git commit -m \"docker-compose.yml: agents can't stop it\""]:
+    expect(f"`{cmd}`", False, "Bash", command=cmd)
+
 subprocess.run(["git", "worktree", "remove", "--force", FW], cwd=main, capture_output=True)
 subprocess.run(["git", "worktree", "remove", "--force", AW], cwd=main, capture_output=True)
 shutil.rmtree(box, ignore_errors=True)

@@ -329,11 +329,23 @@ def issue_title(line):
     return title or line.strip()
 
 
+def require_services():
+    """Postgres must be up before a run starts (`gate --services`). Otherwise the run spends
+    about 15 minutes and a dollar on agents before the gate refuses, and in the control room
+    it says so only then. Raises ValueError with what to start."""
+    res = subprocess.run([sys.executable, "-X", "utf8", str(FACTORY / "bin" / "gate"), "--services"],
+                         cwd=REPO, capture_output=True, text=True, encoding="utf-8")
+    if res.returncode != 0:
+        why = (res.stderr.strip() or res.stdout.strip() or f"exit {res.returncode}").removeprefix("gate: ")
+        raise ValueError(f"Not started: {why}")
+
+
 def start_run(prompt):
     """File the prompt as an issue and start a headless ADW run on it."""
     lines = [l for l in prompt.strip().splitlines() if l.strip()]
     if not lines:
         raise ValueError("Write what you want built.")
+    require_services()
     title = short(issue_title(lines[0]), 80)
     res = subprocess.run(["gh", "issue", "create", "--title", title, "--body", prompt.strip()],
                          cwd=REPO, capture_output=True, text=True, encoding="utf-8")
@@ -354,6 +366,7 @@ def give_feedback(run_id, text):
     state = json.loads(state_file.read_text(encoding="utf-8"))
     if state.get("stage") != "needs-human":
         raise ValueError(f"The run is at {state.get('stage')}, not waiting for you.")
+    require_services()
     spawn(["adw_patch_iso.py", str(state["issue_number"]), run_id[4:], text.strip()], run_id[4:])
     return {"run": run_id}
 

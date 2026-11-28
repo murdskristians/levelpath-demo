@@ -730,6 +730,13 @@ def cmd_create(number):
         require_slot(None)
     except Refused as e:
         die(str(e))
+    # Postgres must be up before the agents start, or the job spends about 15 minutes on
+    # intake, the planner and the builder before the gate refuses (gate --services).
+    res = subprocess.run([sys.executable, "-X", "utf8", str(FACTORY / "bin" / "gate"), "--services"],
+                         capture_output=True, text=True, encoding="utf-8")
+    if res.returncode != 0:
+        die((res.stderr.strip() or res.stdout.strip() or f"gate --services: exit {res.returncode}")
+            .removeprefix("gate: "))
     issue = fetch_issue(number)
     if issue["state"] != "OPEN":
         die(f"issue #{number} is {issue['state'].lower()}")

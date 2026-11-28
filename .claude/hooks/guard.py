@@ -19,6 +19,8 @@ It blocks:
   6. edits to the harness's protected paths from inside an agent's worktree
   7. a run file written where nothing reads it: in a job folder only the contract's
      files (a review only in its round folder), and those names nowhere else
+  8. stopping or removing the shared dev Postgres: pnpm db:down, docker compose
+     down/stop/rm, docker stop/rm, volume and system prunes
 
 Stdlib only, so it starts fast: one process per tool call.
 """
@@ -327,6 +329,31 @@ def check_run_files(tool, inp, cwd):
               "prompt names (Job folder: …), reviews in its round-<N>/ folder.")
 
 
+# ---- 8. the shared dev Postgres ------------------------------------------------------
+
+# docker-compose.yml names one project (levelpath-demo) for every checkout, so a run's
+# worktree reaches the same Postgres as Chris's checkout and every other run. Stopping it
+# from one run breaks the others' tests; removing its volume deletes the demo data.
+DB_DOWN = re.compile(r"\b(pnpm|npm|yarn)\s+(run\s+)?db:down\b")
+COMPOSE = re.compile(r"\bdocker(-compose|\s+compose)(?=\s|$)")  # the command, not docker-compose.yml
+COMPOSE_STOPS = {"down", "stop", "kill", "rm", "restart", "pause"}
+DOCKER_STOP = re.compile(r"\bdocker\s+(container\s+)?(stop|kill|rm|restart|pause|prune)\b")
+DOCKER_WIPE = re.compile(r"\bdocker\s+(volume\s+(rm|prune)|system\s+prune)\b")
+
+
+def check_shared_db(tool, inp):
+    if tool not in SHELL_TOOLS:
+        return
+    for seg in segments(inp.get("command", "")):
+        compose = COMPOSE.search(seg)
+        if (DB_DOWN.search(seg) or DOCKER_STOP.search(seg) or DOCKER_WIPE.search(seg)
+                or (compose and COMPOSE_STOPS & set(seg[compose.end():].split()))):
+            block("the dev Postgres is shared by every run and Chris's own checkout (one Compose "
+                  "project, levelpath-demo): stopping it breaks their tests, and removing it deletes "
+                  "the demo data. Leave it running. `pnpm db:up` starts it when it's down; for "
+                  "anything else, ask Chris.")
+
+
 def main():
     event = json.load(sys.stdin)
     tool = event.get("tool_name", "")
@@ -337,6 +364,7 @@ def main():
     check_merge(tool, inp, cwd)
     check_edits(tool, inp, cwd)
     check_run_files(tool, inp, cwd)
+    check_shared_db(tool, inp)
     sys.exit(0)
 
 

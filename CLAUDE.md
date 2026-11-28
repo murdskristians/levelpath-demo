@@ -17,7 +17,7 @@ A small multi-tenant purchase-request app (Levelpath interview demo), built **th
 | `pnpm eval -- --api <url>` | one `PASS`/`FAIL` line per case, then `pass rate: N/M (P%)`, exit 0; exit 1 if the API can't be reached. Against the mock, `15/15 (100%)` |
 | `pnpm dev:llm`             | Chris only: `pnpm dev` with the real model (needs `.env` with the key; every Suggest fields click is a paid call)                         |
 
-**The API tests need Postgres up** (`pnpm db:up`). Each run creates its own `lp_<random>` database, migrates and seeds it, and drops it; without Postgres they fail and say so.
+**The API tests need Postgres up** (`pnpm db:up`). Each run creates its own `lp_<start time>_<random>` database, migrates and seeds it, and drops it; it also drops those that killed runs left (over an hour old, nobody connected). Without Postgres they fail and say so. **Every checkout shares this one Postgres** (`docker-compose.yml` names one project), so never stop or remove it: the guard blocks `pnpm db:down` and `docker compose down`.
 
 Try the API: `pnpm db:migrate && pnpm db:seed`, then `curl -H "X-User-Id: a0000000-0000-4000-8000-000000000101" localhost:3000/me` (Alice at Acme; the seeded ids are in `db/seed.sql`).
 

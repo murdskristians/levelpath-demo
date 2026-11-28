@@ -13,9 +13,10 @@ moves. When a script refuses, its message says why. Fix the cause or stop and
 tell the user; never work around it.
 
 Postgres must be up before a run (`pnpm db:up`): the gate's API tests create their
-own database on it. The gate checks it first: when it exits 2 saying a service
-is down, nothing was recorded and the round is not used. Tell the user what to
-start, and run the gate again once it's up. It is not the builder's bug.
+own database on it. `factory/bin/job create` refuses while it's down. The gate
+checks it first too: when it exits 2 saying a service is down, nothing was
+recorded and the round is not used. Tell the user what to start, and run the
+gate again once it's up. It is not the builder's bug.
 
 ```
 /factory run          drain the queue: every open `factory` issue, `concurrency` at a time; also resumes
