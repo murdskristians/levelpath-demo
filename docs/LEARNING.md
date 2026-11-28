@@ -220,6 +220,12 @@ One entry per new concept: what it is, why it matters, where it lives in this re
 - **Where:** the graphify section of [CLAUDE.md](../CLAUDE.md), the "Finding code" step in the planner and builder roles (`.claude/agents/`), `.claude/skills/graphify/`, and `graphify-out/` in the main checkout only (git-ignored, rebuilt by graphify's git hooks after every commit, checkout and pull). Agents query it there with `cd <main checkout> && graphify query …`, so a job worktree never needs its own copy.
 - **Lesson from run 3:** installing it is not using it. With only CLAUDE.md rules and advisory hooks, no agent queried the graph once; each role's own steps won. A tool reaches agents through their role file.
 
+## Theming with CSS custom properties and a no-flash script
+
+- **What:** Every color in [App.css](../apps/web/src/App.css) is a custom property on `:root` (light). `:root[data-theme='dark']` overrides them. `theme.ts` reads the stored choice (else the OS preference) and sets `data-theme` on `<html>`.
+- **Why it matters:** The bundle loads after the first paint, so a theme set only from React would flash the wrong one. A tiny inline script in `index.html` sets the attribute first; a test keeps it in step with `loadTheme()`. A contrast test reads the CSS so a palette edit can't drop below WCAG AA.
+- **Where:** [theme.ts](../apps/web/src/theme.ts), [ThemeToggle.tsx](../apps/web/src/components/ThemeToggle.tsx), [theme.test.ts](../apps/web/src/theme.test.ts).
+
 ## Compose project names and git worktrees
 
 - **What:** Docker Compose groups containers, volumes and networks into a project. Without a `name:` in the file, the project is named after the folder: `docker compose up` in `trees/78d872a3` makes `78d872a3-db-1` and a `78d872a3_pgdata` volume, a second Postgres.

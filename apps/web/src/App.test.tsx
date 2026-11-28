@@ -662,6 +662,83 @@ describe('App', () => {
     });
   });
 
+  describe('theme', () => {
+    const osDark = (dark: boolean) =>
+      vi.stubGlobal(
+        'matchMedia',
+        vi.fn(() => ({ matches: dark })),
+      );
+    const root = document.documentElement;
+    afterEach(() => {
+      delete root.dataset.theme;
+    });
+
+    it('follows a dark OS when nothing is stored', () => {
+      mockFetch({});
+      osDark(true);
+      render(<App />);
+      expect(root.dataset.theme).toBe('dark');
+      expect(screen.getByRole('button', { name: 'Switch to light theme' })).toBeTruthy();
+    });
+
+    it('is light for a light OS and when matchMedia is missing', () => {
+      mockFetch({});
+      osDark(false);
+      render(<App />);
+      expect(root.dataset.theme).toBe('light');
+      cleanup();
+      vi.stubGlobal('matchMedia', undefined);
+      render(<App />);
+      expect(root.dataset.theme).toBe('light');
+      expect(screen.getByRole('button', { name: 'Switch to dark theme' })).toBeTruthy();
+    });
+
+    it('toggles, flips the name and stores the choice', () => {
+      mockFetch({});
+      osDark(false);
+      render(<App />);
+      fireEvent.click(screen.getByRole('button', { name: 'Switch to dark theme' }));
+      expect(root.dataset.theme).toBe('dark');
+      expect(localStorage.getItem('levelpath.theme')).toBe('dark');
+      fireEvent.click(screen.getByRole('button', { name: 'Switch to light theme' }));
+      expect(root.dataset.theme).toBe('light');
+      expect(localStorage.getItem('levelpath.theme')).toBe('light');
+    });
+
+    it('prefers the stored choice and ignores an invalid one', () => {
+      mockFetch({});
+      osDark(true);
+      localStorage.setItem('levelpath.theme', 'light');
+      render(<App />);
+      expect(root.dataset.theme).toBe('light');
+      cleanup();
+      osDark(false);
+      localStorage.setItem('levelpath.theme', 'dark');
+      render(<App />);
+      expect(root.dataset.theme).toBe('dark');
+      cleanup();
+      osDark(true);
+      localStorage.setItem('levelpath.theme', 'purple');
+      render(<App />);
+      expect(root.dataset.theme).toBe('dark');
+    });
+
+    it('keeps the theme when the user changes', async () => {
+      mockFetch({
+        ...base(ALICE),
+        'GET /me': me(ALICE),
+      });
+      osDark(false);
+      renderAs(ALICE);
+      fireEvent.click(screen.getByRole('button', { name: 'Switch to dark theme' }));
+      fireEvent.change(screen.getByLabelText('User'), { target: { value: BELLA } });
+      await waitFor(() => expect(localStorage.getItem(KEY)).toBe(BELLA));
+      expect(root.dataset.theme).toBe('dark');
+      expect(localStorage.getItem('levelpath.theme')).toBe('dark');
+      expect(screen.getByRole('button', { name: 'Switch to light theme' })).toBeTruthy();
+    });
+  });
+
   describe('styles', () => {
     const css = readFileSync('src/App.css', 'utf8');
 
