@@ -165,15 +165,20 @@ def tool_detail(name, inp):
 
 HOOK_BLOCK = re.compile(r"\w+(?::\w+)? hook error: \[(.*?)\]: (.*)", re.S)
 EXIT_WITH_OUTPUT = re.compile(r"Exit code (\d+)\n(.*\S.*)", re.S)
+# Claude Code's own refusals, such as a bare `sleep 25` (run 72430acb's verifier)
+CLI_BLOCK = re.compile(r"\s*<tool_use_error>\s*Blocked:\s*(.*?)\s*(?:</tool_use_error>)?\s*$", re.S)
 
 
 def result_event(ts, text, is_error):
-    """One tool result. Claude Code marks two ordinary things as errors, and the page
+    """One tool result. Claude Code marks three ordinary things as errors, and the page
     showed them in red: a hook saying no (an agent tried something a rule forbids, and
-    learned why), and a command that ran and printed its output but exited non-zero.
-    They get their own kinds, so red stays for real failures."""
+    learned why), Claude Code itself saying no (a bare `sleep`), and a command that ran
+    and printed its output but exited non-zero. They get their own kinds, so red stays
+    for real failures."""
     if not is_error:
         return {"t": ts, "kind": "result", "text": short(text, 400)}
+    if m := CLI_BLOCK.match(text):
+        return {"t": ts, "kind": "blocked", "name": "claude code", "text": short(f"claude code: {m.group(1)}", 400)}
     if m := HOOK_BLOCK.match(text):
         scripts = re.findall(r"(\w+)\.py", m.group(1))
         hook = scripts[-1] if scripts else short(m.group(1), 40)

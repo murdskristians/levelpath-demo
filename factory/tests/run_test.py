@@ -13,6 +13,7 @@ import importlib.machinery
 import importlib.util
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -551,11 +552,25 @@ cases = [
     ("Exit code 1\n   \n", True, "error", None, "Exit code 1"),
     ("File does not exist.", True, "error", None, "File does not exist."),
     ("Exit code 2\nlooks like an exit", False, "result", None, "Exit code 2 looks like an exit"),
+    # Claude Code's own refusal, as run 72430acb's verifier got it
+    ("<tool_use_error>Blocked: sleep 25 followed by: curl -s localhost:9104/health. To wait for a condition, "
+     "use Monitor with an until-loop.</tool_use_error>", True, "blocked", "claude code",
+     "claude code: sleep 25 followed by: curl -s localhost:9104/health. To wait for a condition, "
+     "use Monitor with an until-loop."),
+    ("<tool_use_error>File has not been read yet.</tool_use_error>", True, "error", None,
+     "<tool_use_error>File has not been read yet.</tool_use_error>"),
 ]
 for text, is_error, kind, name, shown in cases:
     ev = serve.result_event("t", text, is_error)
     check(f"Agents tab: {shown.splitlines()[0][:40]!r} ({'error' if is_error else 'ok'}) shows as {kind}",
           ev["kind"] == kind and ev.get("name") == name and ev["text"] == serve.short(shown, 400), ev)
+
+# The roles that start the app wait for it with curl's retries: Claude Code blocks a bare
+# `sleep N`, and run 72430acb's verifier lost a step to `sleep 25 && curl …`.
+for role in ["builder", "verifier"]:
+    body = (SRC / ".claude/agents" / f"{role}.md").read_text(encoding="utf-8")
+    check(f"the {role} role waits for the app with curl --retry-connrefused, not sleep",
+          "--retry-connrefused" in body and not re.search(r"`[^`]*\bsleep \d", body), role)
 
 import http.client  # noqa: E402  (not urllib: with SSLKEYLOGFILE set it loads OpenSSL, which crashes on Windows)
 import threading  # noqa: E402

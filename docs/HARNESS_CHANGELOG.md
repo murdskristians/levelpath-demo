@@ -845,3 +845,21 @@ Format:
   - API 3 new (the sweep drops an old database, keeps one in use and a fresh one).
 - **Checked live:** `pnpm db:up` from a worktree-named folder found the running container (same id, not restarted) and created nothing. A database named as if left an hour ago was dropped by the next test run, with a log line.
 - **Why this prevents a repeat:** a run can't create a second Postgres, can't stop the shared one, and can't start without it. A test database dies with its run, or with the next run.
+
+## 2026-11-28: The verifier waited with a `sleep` that Claude Code blocks
+
+- **What went wrong:** In the dry run `72430acb`, the verifier started the app and ran `sleep 25` before its first `curl`. Claude Code (2.1.326) blocks a bare `sleep N` in Bash, and says to wait with a loop instead. The verifier recovered and passed, but it lost a step, and the Agents tab showed the refusal as a red `error`. It was the first time in four verifier runs: newer Claude Code versions block it.
+- **Before:**
+  - the verifier role said only "Wait until they answer (`curl -s localhost:<a>/health`)", and the builder role said nothing about waiting, so each agent picked its own way;
+  - the Agents tab showed Claude Code's own refusals in red.
+- **After:**
+  - **Roles:** the builder and the verifier wait with curl's own retries, `curl --retry 30 --retry-connrefused --retry-delay 2 -sf localhost:<a>/health` (and the same for the web port). There's no `sleep`, and it works with only the Bash tool, which is all the headless agents have.
+  - **Agents tab:** `serve` shows a `<tool_use_error>Blocked: …` result as amber `blocked`, labelled `claude code`, like a hook's block. Other tool errors stay red.
+- **Tests:** factory checks 84, up 4:
+  - the refusal text from the run's log shows as blocked;
+  - another tool error stays red;
+  - each of the two roles waits with `--retry-connrefused` and names no bare `sleep`.
+
+  Three of them fail on the old files. Checked by hand: the retry waits for a server that starts 4 seconds later and returns as soon as it answers.
+
+- **Why this prevents a repeat:** the roles name a way to wait that nothing blocks, and a test fails if a role goes back to `sleep`.

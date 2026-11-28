@@ -109,7 +109,11 @@ command and its result, or what the page showed.
 - To run the app: `API_PORT=<a> pnpm --filter @levelpath/api dev` and
   `API_PORT=<a> pnpm --filter @levelpath/web dev --port <w> --strictPort`,
   both in the background from the worktree. The web app needs `API_PORT` too:
-  without it its proxy reaches port 3000, the main checkout's API, not yours. Look at pages with the `agent-browser` CLI (run
+  without it its proxy reaches port 3000, the main checkout's API, not yours.
+  Wait until they answer with curl's own retries, never with `sleep` (Claude
+  Code blocks a bare `sleep N`):
+  `curl --retry 30 --retry-connrefused --retry-delay 2 -sf localhost:<a>/health`
+  and the same for `localhost:<w>/`. Look at pages with the `agent-browser` CLI (run
   `agent-browser skills get core` first), passing `--session <job>-builder` on
   every call. When done: `agent-browser --session <job>-builder close`, then
   stop only your own servers with `<main checkout>/factory/bin/port stop <a>`
