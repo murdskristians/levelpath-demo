@@ -725,7 +725,7 @@ function setTab(tab) {
 
 function eventRow(e) {
   const label = { text: 'says', prompt: 'prompt', result: '→', error: 'error', blocked: 'blocked', done: 'done' }[e.kind] || e.name || e.kind
-  const tip = e.kind === 'blocked' ? `blocked by the ${e.name} hook` : e.kind === 'exit' ? `the command ran and printed this, but exited non-zero (${e.name})` : label
+  const tip = e.kind === 'blocked' ? (e.name === 'claude code' ? 'blocked by Claude Code itself' : `blocked by the ${e.name} hook`) : e.kind === 'exit' ? `the command ran and printed this, but exited non-zero (${e.name})` : label
   return `<div class="ev ${esc(e.kind)}"><span class="k" title="${esc(tip)}">${esc(label)}</span><span class="tx">${esc(e.text)}</span></div>`
 }
 

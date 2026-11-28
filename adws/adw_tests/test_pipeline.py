@@ -24,6 +24,7 @@ except ImportError:
 
 from adw_modules import gh, pipeline, worktrees  # noqa: E402
 from adw_modules import state as state_mod  # noqa: E402
+from adw_modules.agent import RoleResult  # noqa: E402
 from adw_modules.state import ADWState  # noqa: E402
 
 LOG = logging.getLogger("test_pipeline")
@@ -309,6 +310,42 @@ class ServicesTest(unittest.TestCase):
                 pipeline.patch(st, LOG, "make the toggle bigger")
         self.assertEqual((st["stage"], self.handed), ("needs-human", []))  # still waiting for you
         self.assertEqual(list(self.dir.glob("feedback-*.md")), [])  # the feedback isn't used up
+
+
+class AgentFailureTest(unittest.TestCase):
+    """pipeline.role(): an agent that fails stops the run with its own reason; a cap doesn't."""
+
+    def setUp(self):
+        self.dir = Path(tempfile.mkdtemp(prefix="adw-agentfail-"))
+        self.handed = []
+        self.saved = (pipeline.run_role, pipeline.folder, pipeline.hand_over, pipeline.roles.log_path)
+        pipeline.folder = lambda s: self.dir
+        pipeline.hand_over = lambda s, l: self.handed.append((self.dir / "decision.md").read_text(encoding="utf-8"))
+        pipeline.roles.log_path = lambda adw_id, tag: str(self.dir / f"{tag}.jsonl")
+
+    def tearDown(self):
+        pipeline.run_role, pipeline.folder, pipeline.hand_over, pipeline.roles.log_path = self.saved
+
+    def answer(self, ok, text, subtype):
+        pipeline.run_role = lambda *a, **k: RoleResult(ok, text, subtype)
+
+    def test_a_usage_limit_stops_the_run_and_the_card_says_why(self):
+        self.answer(False, "Claude AI usage limit reached. Your limit resets at 3pm.", "success")
+        st = state()
+        st.update(stage="intake")
+        with self.assertRaises(pipeline.Stop):
+            with pipeline.on_crash(st, LOG):
+                pipeline.role(st, LOG, "intake", "prompt")
+        self.assertEqual(len(self.handed), 1)
+        self.assertIn("the intake agent failed: Claude AI usage limit reached", self.handed[0])
+
+    def test_a_cap_is_an_answer_not_a_failure(self):
+        self.answer(False, "", "error_max_turns")
+        self.assertEqual(pipeline.role(state(), LOG, "builder", "prompt"), "")
+
+    def test_a_good_answer_passes(self):
+        self.answer(True, "STATUS: READY", "success")
+        self.assertEqual(pipeline.role(state(), LOG, "builder", "prompt"), "STATUS: READY")
 
 
 class TriggerTest(unittest.TestCase):

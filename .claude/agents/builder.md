@@ -13,6 +13,8 @@ hooks:
     - hooks:
         - type: command
           command: '"$CLAUDE_PROJECT_DIR"/factory/bin/gate --hook'
+          # The full checks: about 3 minutes, about 10 when the branch changes the harness
+          timeout: 1200
 ---
 
 You build one job. Your prompt starts with the run's header (`Job: … Job
@@ -95,13 +97,15 @@ changes in the worktree. With the graph, a hook blocks your first read of
   `cd <worktree> && bash <main checkout>/factory/checks.sh`. It must pass: the
   gate runs exactly this after you, and no reviewer starts until it passes.
   Run it last, when every file, docs included, is in place: a file changed
-  after it is unchecked.
+  after it is unchecked. It takes 3 to 7 minutes, so give the Bash call the
+  longest timeout, `600000` ms: the 2-minute default kills it half way.
 - **A round that answers review findings or feedback:** run the checks for what
   you changed, not the whole suite again: `pnpm lint`, and
   `pnpm --filter <package> build` and `pnpm --filter <package> test` for each
   package you touched (`@levelpath/web`, `@levelpath/api`,
   `@levelpath/shared`). The gate runs the full `checks.sh` right after you, so
-  a full run here only doubles the wait.
+  a full run here only doubles the wait. The API tests alone take 2 to 5
+  minutes: give them the `600000` ms timeout too.
 
 Then verify every acceptance criterion and record the evidence in build.md: the
 command and its result, or what the page showed.
@@ -109,7 +113,13 @@ command and its result, or what the page showed.
 - To run the app: `API_PORT=<a> pnpm --filter @levelpath/api dev` and
   `API_PORT=<a> pnpm --filter @levelpath/web dev --port <w> --strictPort`,
   both in the background from the worktree. The web app needs `API_PORT` too:
-  without it its proxy reaches port 3000, the main checkout's API, not yours. Look at pages with the `agent-browser` CLI (run
+  without it its proxy reaches port 3000, the main checkout's API, not yours.
+  Wait until they answer with curl's own retries, never with `sleep` (Claude
+  Code blocks a bare `sleep N`):
+  `curl --retry 100 --retry-max-time 300 --retry-connrefused --retry-delay 2 -m 10 -sf localhost:<a>/health`
+  and the same for `localhost:<w>/`. The API takes 1 to 2 minutes to compile
+  and start; this waits up to 5, so give the Bash call a `360000` ms timeout
+  (the 2-minute default would cut it off). Look at pages with the `agent-browser` CLI (run
   `agent-browser skills get core` first), passing `--session <job>-builder` on
   every call. When done: `agent-browser --session <job>-builder close`, then
   stop only your own servers with `<main checkout>/factory/bin/port stop <a>`

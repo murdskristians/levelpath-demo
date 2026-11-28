@@ -13,6 +13,7 @@ import importlib.machinery
 import importlib.util
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -68,6 +69,7 @@ config.pop("gate_services", None)
 (proj / "factory/checks.sh").write_text(
     '#!/usr/bin/env bash\nset -euo pipefail\n'
     'echo "checks ok ✓ ünïcode"\n'
+    "printf '\\033[2J\\033[32m\\342\\234\\223\\033[39m coloured line\\n'\n"
     'if [ -f FAIL_CHECKS ]; then echo "lint failed ✗"; exit 1; fi\n', encoding="utf-8", newline="\n")
 (proj / ".gitignore").write_text("/factory/jobs/\n/.worktrees/\n")
 (proj / "app.txt").write_text("hello\n")
@@ -187,6 +189,8 @@ r = sh([BASH, "-lc", f"factory/bin/gate {jid}"], proj, env=env)
 checks_md = (jd / "round-1/checks.md").read_text(encoding="utf-8")
 check("gate PASS", r.returncode == 0 and "GATE: PASS" in r.stdout, r.stdout + r.stderr)
 check("gate log keeps unicode", "checks ok ✓ ünïcode" in checks_md)
+check("gate strips colour codes from checks.md (they showed as [32m✓[39m in the Files tab)",
+      "✓ coloured line" in checks_md and "\x1b" not in checks_md, repr(checks_md[-200:]))
 r = sh([BASH, "-lc", f"factory/bin/gate {jid} --merge"], proj, env=env)
 check("gate has no --merge mode", r.returncode != 0 and not (jd / "round-1/merge-checks.md").exists(),
       r.stdout + r.stderr)
@@ -551,11 +555,34 @@ cases = [
     ("Exit code 1\n   \n", True, "error", None, "Exit code 1"),
     ("File does not exist.", True, "error", None, "File does not exist."),
     ("Exit code 2\nlooks like an exit", False, "result", None, "Exit code 2 looks like an exit"),
+    # A `tail` of a Nest log, as run 72430acb's verifier showed it: no raw colour codes
+    ("> nest start --watch\x1b[2J\x1b[3J\x1b[H[\x1b[90m15:06:14\x1b[0m] Starting compilation", False, "result",
+     None, "> nest start --watch[15:06:14] Starting compilation"),
+    # Claude Code's own refusal, as run 72430acb's verifier got it
+    ("<tool_use_error>Blocked: sleep 25 followed by: curl -s localhost:9104/health. To wait for a condition, "
+     "use Monitor with an until-loop.</tool_use_error>", True, "blocked", "claude code",
+     "claude code: sleep 25 followed by: curl -s localhost:9104/health. To wait for a condition, "
+     "use Monitor with an until-loop."),
+    ("<tool_use_error>File has not been read yet.</tool_use_error>", True, "error", None,
+     "<tool_use_error>File has not been read yet.</tool_use_error>"),
 ]
 for text, is_error, kind, name, shown in cases:
     ev = serve.result_event("t", text, is_error)
     check(f"Agents tab: {shown.splitlines()[0][:40]!r} ({'error' if is_error else 'ok'}) shows as {kind}",
           ev["kind"] == kind and ev.get("name") == name and ev["text"] == serve.short(shown, 400), ev)
+
+# The roles that start the app wait for it with curl's retries: Claude Code blocks a bare
+# `sleep N`, and run 72430acb's verifier lost a step to `sleep 25 && curl …`.
+for role in ["builder", "verifier"]:
+    body = (SRC / ".claude/agents" / f"{role}.md").read_text(encoding="utf-8")
+    # The Bash tool cuts a command off after 2 minutes unless the call sets a longer
+    # timeout, so a 5-minute wait needs one; -m 10 retries an attempt that hangs.
+    check(f"the {role} role waits up to 5 minutes for the app with curl's retries, not sleep",
+          "--retry-connrefused" in body and "--retry-max-time 300" in body and "-m 10" in body
+          and "360000" in body and not re.search(r"`[^`]*\bsleep \d", body), role)
+builder_md = (SRC / ".claude/agents/builder.md").read_text(encoding="utf-8")
+check("the builder runs checks.sh with the 10-minute Bash timeout and has a 20-minute Stop hook",
+      "600000" in builder_md and "timeout: 1200" in builder_md)
 
 import http.client  # noqa: E402  (not urllib: with SSLKEYLOGFILE set it loads OpenSSL, which crashes on Windows)
 import threading  # noqa: E402
