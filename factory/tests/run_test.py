@@ -555,6 +555,9 @@ cases = [
     ("Exit code 1\n   \n", True, "error", None, "Exit code 1"),
     ("File does not exist.", True, "error", None, "File does not exist."),
     ("Exit code 2\nlooks like an exit", False, "result", None, "Exit code 2 looks like an exit"),
+    # A `tail` of a Nest log, as run 72430acb's verifier showed it: no raw colour codes
+    ("> nest start --watch\x1b[2J\x1b[3J\x1b[H[\x1b[90m15:06:14\x1b[0m] Starting compilation", False, "result",
+     None, "> nest start --watch[15:06:14] Starting compilation"),
     # Claude Code's own refusal, as run 72430acb's verifier got it
     ("<tool_use_error>Blocked: sleep 25 followed by: curl -s localhost:9104/health. To wait for a condition, "
      "use Monitor with an until-loop.</tool_use_error>", True, "blocked", "claude code",

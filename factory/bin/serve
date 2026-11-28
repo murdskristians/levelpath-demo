@@ -151,8 +151,13 @@ def cached(path, parse):
     return value
 
 
+# Terminal colour and screen codes in tool output (a `tail` of a Nest or Vite log): they
+# showed as `[2J[3J[H[90m15:06:14[0m]` in the Agents tab. The gate strips them too.
+ANSI = re.compile(r"\x1b\[[0-9;?]*[ -/]*[@-~]")
+
+
 def short(value, limit=240):
-    text = " ".join(str(value).split())
+    text = " ".join(ANSI.sub("", str(value)).split())
     return text if len(text) <= limit else text[: limit - 1] + "…"
 
 

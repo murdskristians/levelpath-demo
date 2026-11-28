@@ -29,6 +29,7 @@ from adw_modules.state import ADWState
 
 LABELS = roles.CONFIG["labels"]
 MAX_ROUNDS = roles.CONFIG["max_rounds"]
+AGENT_CAPS = {"error_max_turns", "error_max_budget_usd"}  # claude -p result subtypes for the caps
 
 
 class Stop(Exception):
@@ -67,6 +68,13 @@ def role(state: ADWState, logger, name: str, prompt: str, model: Optional[str] =
     logger.info(f"← {tag}: {res.text.splitlines()[0] if res.text else res.subtype} (${res.cost_usd:.2f})")
     if not res.ok:
         logger.error(f"{tag} did not finish: {res.subtype}: {res.text[:300]} (log: {res.log_file})")
+        # A cap (turns, budget) is an answer: the agent may still have written its file, and
+        # the caller checks. Anything else (usage limit, expired login, a crash or a timeout
+        # that already had its one retry) stops the run with the agent's own reason. Before,
+        # the run went on and the card said only that a file was missing.
+        if res.subtype not in AGENT_CAPS:
+            raise Stop(f"the {tag} agent failed: {(res.text or res.subtype or 'no result').strip()[:300]} "
+                       f"(log: agents/{state.get('adw_id')}/logs/{tag}.jsonl)")
     return res.text
 
 
