@@ -57,7 +57,8 @@ comment.
 ## Setup
 
 - Postgres up (`pnpm db:up`): the gate's API tests create their own database on
-  it, and fail with "Run `pnpm db:up` first" without it.
+  it. Without it, a run stops before intake and says what to start, and the
+  control room's Start run refuses.
 - `gh auth login`, and `claude` logged in to your subscription. No
   `ANTHROPIC_API_KEY` is needed or passed on, unless you set
   `ADW_USE_API_KEY=true`.

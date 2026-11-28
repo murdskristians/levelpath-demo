@@ -6,6 +6,7 @@ Usage:
   gate --run <worktree> <round-dir> any driver (ADWs, /verify): the same, for a worktree and a round folder
   gate --tree <worktree>            print the id the gate records as COMMIT for this worktree
   gate --hook                       builder Stop hook: run the checks once, exit 2 on failure
+  gate --services                   before a run starts: exit 0 when the gate's services answer, else 2
 
 The gate runs the main checkout's factory/checks.sh inside the job's worktree,
 so a branch can't change the checks it is judged by. It also fails when the
@@ -119,6 +120,18 @@ def services_down():
         except OSError:
             down.append((service["tcp"], service.get("hint", "")))
     return down
+
+
+def services():
+    """A run checks this before it starts. Without it, a run started with Docker stopped
+    spent about 15 minutes and a dollar on intake, the planner and the builder before the
+    gate refused to run."""
+    down = services_down()
+    if down:
+        die("a service the checks need is down: "
+            + "; ".join(f"{addr} ({hint})" if hint else addr for addr, hint in down)
+            + ". Start it, then start the run again.")
+    print("gate: services up")
 
 
 def keep_earlier_run(round_dir):
@@ -245,6 +258,8 @@ def main(argv):
         run_gate(argv[1], argv[2], Path(argv[2]).name)
     elif len(argv) == 2 and argv[0] == "--tree":
         print(tree_id(argv[1]))
+    elif argv == ["--services"]:
+        services()
     else:
         die(__doc__.strip())
 

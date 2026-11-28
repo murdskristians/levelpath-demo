@@ -823,3 +823,25 @@ Format:
 
 - **Tests:** factory checks 73, up 7, from the texts in the run's logs. Classifying every log from the last three runs found 3 hook blocks, 2 exits and 2 real errors (reads of missing files).
 - **Why this prevents a repeat:** red means something failed, so a person watching a run isn't sent after the harness doing its job.
+
+## 2026-11-28: Every run made its own Postgres, and failed test runs left their databases
+
+- **What went wrong:** Chris found nine stopped containers in Docker (`78d872a3-db-1`, `009-edit-a-draft-purchase-db-1`, …), each with a volume and a network. Looking for the cause turned up three more problems:
+  - **A Postgres per worktree.** The builder runs `pnpm db:up` in its worktree. Compose names a project after its folder, so every run got its own project. While the main Postgres held 5432, the new container couldn't start. When the main one was down, it did start, with an empty database (`004-…` had run), and the run's tests used that.
+  - **Leaked test databases.** Two `lp_*` databases from the builder of run `78d872a3` were still in the dev Postgres. When the web tests failed, `pnpm -r test` stopped the API tests before their teardown could drop their database. Reproduced: a failing web test left one database per `pnpm test`.
+  - **Late failure.** A run started with Docker stopped ran intake, the planner and the builder (about 15 minutes and a dollar) before the gate refused.
+- **Before:** each checkout had its own Compose project. `pnpm test` bailed on the first failing package. A killed test run's database stayed forever. Nothing checked Postgres before a run.
+- **After:**
+  - **One project:** `docker-compose.yml` sets `name: levelpath-demo`, so `pnpm db:up` in any worktree reaches the same Postgres. `db:up` adds `--no-recreate`, so a branch's copy of the file can't replace the running one.
+  - **No bail:** `pnpm test` is `pnpm -r --no-bail test`. Every package finishes, and the exit code is still non-zero on a failure.
+  - **Cleanup:** test databases are named `lp_<start time>_<random>`. Each run first drops those over an hour old that nobody is connected to (`apps/api/test/test-databases.mjs`).
+  - **Check first:** `gate --services`. The control room's Start run and feedback refuse with what to start, and so does `job create`. An ADW run stops before intake and is handed over with the reason.
+  - **Guard rule 8:** agents can't stop or remove the shared Postgres (`pnpm db:down`, `docker compose down/stop/rm`, `docker stop/rm`, volume and system prunes).
+  - **Harness tests:** `checks.sh` also runs them when the root `package.json` or `docker-compose.yml` changes.
+- **Tests:**
+  - hooks 168, up 27 (two are for a false positive the new rule had: it blocked this PR's own commit, because the message named `docker-compose.yml` and "stop");
+  - factory 80, up 7 (the worktree's Compose project, the two scripts' flags, `gate --services` down and up, Start run refused with no issue filed, `job create` refused). The first three fail on the old files;
+  - pipeline 19, up 2 (a new run stops before any agent; feedback waits, unused);
+  - API 3 new (the sweep drops an old database, keeps one in use and a fresh one).
+- **Checked live:** `pnpm db:up` from a worktree-named folder found the running container (same id, not restarted) and created nothing. A database named as if left an hour ago was dropped by the next test run, with a log line.
+- **Why this prevents a repeat:** a run can't create a second Postgres, can't stop the shared one, and can't start without it. A test database dies with its run, or with the next run.

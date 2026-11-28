@@ -7,6 +7,7 @@ The gate runs it (factory/checks.sh) when a branch changes the harness.
 
 import json
 import logging
+import subprocess
 import sys
 import tempfile
 import threading
@@ -259,6 +260,55 @@ class CrashTest(unittest.TestCase):
         self.assertIn("stopped at stage gate", decision)
         self.assertIn("pnpm db:up", decision)
         self.assertEqual(st["stage"], "needs-human")
+
+
+class ServicesTest(unittest.TestCase):
+    """pipeline.require_services(): with Postgres down, no agent runs, and the run says what to start."""
+
+    DOWN = ("gate: a service the checks need is down: 127.0.0.1:5432 (Postgres for the API tests: run "
+            "`pnpm db:up`, with Docker Desktop running). Start it, then start the run again.")
+
+    def setUp(self):
+        self.dir = Path(tempfile.mkdtemp(prefix="adw-services-"))
+        self.roles, self.handed, self.calls = [], [], []
+        self.saved = (pipeline.folder, pipeline.hand_over, pipeline.role, pipeline.say, subprocess.run,
+                      gh.issue, gh.operator, pipeline.roles.write_issue_md)
+        pipeline.folder = lambda s: self.dir
+        pipeline.hand_over = lambda s, l: self.handed.append((self.dir / "decision.md").read_text(encoding="utf-8"))
+        pipeline.role = lambda st, logger, name, *a, **k: self.roles.append(name)
+        pipeline.say = lambda *a, **k: None
+        gh.issue = lambda n: {"title": "Add a theme toggle", "body": "x"}
+        gh.operator = lambda: "chris"
+        pipeline.roles.write_issue_md = lambda issue, operator: "# Issue\n"
+
+        def gate_says_down(cmd, **kw):  # the gate script's answer, without a stopped database
+            self.calls.append(cmd)
+            return types.SimpleNamespace(returncode=2, stdout="", stderr=self.DOWN)
+        subprocess.run = gate_says_down
+
+    def tearDown(self):
+        (pipeline.folder, pipeline.hand_over, pipeline.role, pipeline.say, subprocess.run,
+         gh.issue, gh.operator, pipeline.roles.write_issue_md) = self.saved
+
+    def test_a_new_run_stops_before_intake_and_is_handed_over(self):
+        st = state()
+        with self.assertRaises(pipeline.Stop):
+            with pipeline.on_crash(st, LOG):
+                pipeline.plan(st, LOG)
+        self.assertEqual(self.roles, [])  # no agent ran, nothing was spent
+        self.assertEqual(self.calls[0][-1], "--services")
+        self.assertEqual(len(self.handed), 1)
+        self.assertIn("stopped at stage intake", self.handed[0])
+        self.assertIn("pnpm db:up", self.handed[0])
+
+    def test_feedback_waits_until_postgres_is_up(self):
+        st = state()
+        st.update(stage="needs-human")
+        with self.assertRaises(pipeline.Stop):
+            with pipeline.on_crash(st, LOG):
+                pipeline.patch(st, LOG, "make the toggle bigger")
+        self.assertEqual((st["stage"], self.handed), ("needs-human", []))  # still waiting for you
+        self.assertEqual(list(self.dir.glob("feedback-*.md")), [])  # the feedback isn't used up
 
 
 class TriggerTest(unittest.TestCase):

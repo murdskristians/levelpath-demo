@@ -137,6 +137,13 @@ def jmain(argv):
 os.chdir(proj)
 
 # ---- 2. create → issue.md with non-ASCII text ----
+config["gate_services"] = [{"tcp": "127.0.0.1:1", "hint": "the test service"}]
+(proj / "factory/config.json").write_text(json.dumps(config), encoding="utf-8", newline="\n")
+code = jmain(["create", "15"])
+check("create with Postgres down: refused before the job exists",
+      code != 0 and not list((proj / "factory").glob("jobs/*")), code)
+config.pop("gate_services")
+(proj / "factory/config.json").write_text(json.dumps(config), encoding="utf-8", newline="\n")
 jmain(["create", "15"])
 jid = next(p.name for p in (proj / "factory/jobs").iterdir())
 jd = proj / "factory/jobs" / jid
@@ -203,6 +210,18 @@ down_round = BOX / "down-round"
 r = sh([BASH, "-lc", f"factory/bin/gate --run '{wt}' '{down_round.as_posix()}'"], proj, env=env)
 check("a service that is down: exit 2, nothing recorded",
       r.returncode == 2 and "the test service" in r.stderr and not down_round.exists(), r.stdout + r.stderr)
+r = sh([BASH, "-lc", "factory/bin/gate --services"], proj, env=env)
+check("gate --services, before a run starts: exit 2 and what to start",
+      r.returncode == 2 and "the test service" in r.stderr and "start the run again" in r.stderr, r.stdout + r.stderr)
+import socket  # noqa: E402
+listener = socket.socket()
+listener.bind(("127.0.0.1", 0))
+listener.listen()
+config["gate_services"] = [{"tcp": f"127.0.0.1:{listener.getsockname()[1]}", "hint": "the test service"}]
+(proj / "factory/config.json").write_text(json.dumps(config), encoding="utf-8", newline="\n")
+r = sh([BASH, "-lc", "factory/bin/gate --services"], proj, env=env)
+check("gate --services when the service answers: exit 0", r.returncode == 0, r.stdout + r.stderr)
+listener.close()
 config.pop("gate_services")
 (proj / "factory/config.json").write_text(json.dumps(config), encoding="utf-8", newline="\n")
 
@@ -447,6 +466,26 @@ if os.name == "nt" and shutil.which("node"):
     if alive:
         parent.kill()
 
+# ---- 10c. every checkout shares one Postgres, and a failed test run cleans up after itself ----
+# Compose named the project after the folder, so `pnpm db:up` in each run's worktree made
+# a Postgres of its own (nine of them, never started). And `pnpm -r test` stopped the API
+# tests when the web tests failed, before they could drop their database.
+if shutil.which("docker"):
+    job_dir = BOX / "001-some-job"  # as a worktree is named: .worktrees/<job>, trees/<adw_id>
+    job_dir.mkdir(exist_ok=True)
+    shutil.copy2(SRC / "docker-compose.yml", job_dir / "docker-compose.yml")
+    r = subprocess.run(["docker", "compose", "config", "--format", "json"], cwd=job_dir,
+                       capture_output=True, text=True, encoding="utf-8")
+    name = json.loads(r.stdout).get("name") if r.returncode == 0 else f"error: {r.stderr.strip()[:200]}"
+    check("a worktree's docker compose reaches the shared project (levelpath-demo)", name == "levelpath-demo", name)
+else:
+    print("SKIP  the shared Compose project: no docker on PATH")
+scripts = json.loads((SRC / "package.json").read_text(encoding="utf-8"))["scripts"]
+check("pnpm db:up never recreates the shared Postgres (--no-recreate)", "--no-recreate" in scripts["db:up"],
+      scripts["db:up"])
+check("pnpm test runs every package to the end, so each can drop its database (--no-bail)",
+      "--no-bail" in scripts["test"], scripts["test"])
+
 # ---- 11. the control room files a pasted intent under its own title ----
 loader = importlib.machinery.SourceFileLoader("factory_serve", str(SRC / "factory/bin/serve"))
 spec = importlib.util.spec_from_loader("factory_serve", loader)
@@ -457,6 +496,32 @@ for line, want in [("# Intent: Edit a draft purchase request", "Edit a draft pur
                    ("Requesters can edit drafts", "Requesters can edit drafts"),
                    ("# ", "#")]:
     check(f"control room issue title from {line!r}", serve.issue_title(line) == want, serve.issue_title(line))
+
+# Start run with Postgres down: refused with what to start, before any issue is filed
+real_factory, real_run, gh_filed = serve.FACTORY, subprocess.run, []
+config["gate_services"] = [{"tcp": "127.0.0.1:1", "hint": "the test service"}]
+(proj / "factory/config.json").write_text(json.dumps(config), encoding="utf-8", newline="\n")
+
+
+def no_gh(cmd, **kw):
+    if cmd[:1] == ["gh"]:
+        gh_filed.append(cmd)
+        raise AssertionError("gh called")
+    return real_run(cmd, **kw)
+
+
+serve.FACTORY, subprocess.run = proj / "factory", no_gh
+try:
+    serve.start_run("Add a light/dark theme toggle")
+    refusal = "started"
+except ValueError as e:
+    refusal = str(e)
+finally:
+    serve.FACTORY, subprocess.run = real_factory, real_run
+    config.pop("gate_services")
+    (proj / "factory/config.json").write_text(json.dumps(config), encoding="utf-8", newline="\n")
+check("control room: Start run with Postgres down is refused, says what to start, files no issue",
+      refusal.startswith("Not started:") and "the test service" in refusal and not gh_filed, refusal)
 
 # ---- 11b. the control room's Agents tab for a factory job (section 8's transcripts) ----
 serve.JOBS = proj / "factory/jobs"

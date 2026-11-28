@@ -11,11 +11,11 @@
     "build": "pnpm -r build",
     "lint": "eslint . && prettier --check .",
     "format": "prettier --write .",
-    "test": "pnpm -r test",
+    "test": "pnpm -r --no-bail test",
     "dev": "pnpm install && pnpm db:up &&pnpm --filter @levelpath/shared build && pnpm -r --parallel dev",
     "dev:llm": "pnpm install && pnpm db:up && pnpm --filter @levelpath/shared build && pnpm -r --parallel run dev:llm",
     "eval": "node evals/run.mjs",
-    "db:up": "docker compose up -d --wait db",
+    "db:up": "docker compose up -d --wait --no-recreate db",
     "db:down": "docker compose down",
     "db:migrate": "pnpm --filter @levelpath/api db:migrate",
     "db:seed": "pnpm --filter @levelpath/api db:seed"

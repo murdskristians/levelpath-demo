@@ -33,10 +33,12 @@ pnpm test
 # the branch changes the harness. There is no CI, so this is the only place they run
 # on their own; they take about three minutes, which app-only rounds don't pay.
 # Committed changes since the branch left main, uncommitted ones (L1) and new files.
+# The root package.json and docker-compose.yml count too: every run uses their
+# scripts and their Postgres, and the factory tests check both.
 base=origin/main
 if git rev-parse -q --verify "$base" >/dev/null; then
   harness=$({ git diff --name-only "$base"...HEAD; git diff --name-only HEAD; git ls-files --others --exclude-standard; } |
-    grep -E '^(\.claude|factory|adws)/' || true)
+    grep -E '^(\.claude|factory|adws)/|^(package\.json|docker-compose\.yml)$' || true)
 else
   harness="unknown base: run them"
 fi
