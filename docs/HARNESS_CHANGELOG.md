@@ -853,7 +853,7 @@ Format:
   - the verifier role said only "Wait until they answer (`curl -s localhost:<a>/health`)", and the builder role said nothing about waiting, so each agent picked its own way;
   - the Agents tab showed Claude Code's own refusals in red.
 - **After:**
-  - **Roles:** the builder and the verifier wait with curl's own retries, `curl --retry 30 --retry-connrefused --retry-delay 2 -sf localhost:<a>/health` (and the same for the web port). There's no `sleep`, and it works with only the Bash tool, which is all the headless agents have.
+  - **Roles:** the builder and the verifier wait with curl's own retries, `curl --retry 100 --retry-max-time 300 --retry-connrefused --retry-delay 2 -sf localhost:<a>/health` (and the same for the web port). There's no `sleep`, and it works with only the Bash tool, which is all the headless agents have. A first version allowed about 2 minutes; the PR's own app took 91 s to answer (44 s to compile, 25 s to start), so the wait is now up to 5 minutes.
   - **Agents tab:** `serve` shows a `<tool_use_error>Blocked: …` result as amber `blocked`, labelled `claude code`, like a hook's block. Other tool errors stay red.
 - **Tests:** factory checks 84, up 4:
   - the refusal text from the run's log shows as blocked;
@@ -863,3 +863,22 @@ Format:
   Three of them fail on the old files. Checked by hand: the retry waits for a server that starts 4 seconds later and returns as soon as it answers.
 
 - **Why this prevents a repeat:** the roles name a way to wait that nothing blocks, and a test fails if a role goes back to `sleep`.
+
+## 2026-11-28: A full pass before the demo, by running things
+
+- **What was done:**
+  - every agent tool call on record (2,292 distinct, from 204 transcripts) replayed through the current guard;
+  - the agents' turn and cost caps compared with the most each role ever used;
+  - the comment trigger, the factory queue, `/try`'s way of starting a PR's app, the health check, GitHub labels, auth and the screenshot repo all run live;
+  - the dev database inspected.
+- **What it found and changed:**
+  - **The guard:** no wrong blocks.
+  - **Caps:** far from every limit (the builder's most is 27 of 200 turns and $0.44 of $10).
+  - **The app wait:** the curl wait above was too short. Now up to 5 minutes.
+  - **Health check:** it said "all good" with Docker stopped. It now checks Postgres (`gate --services`).
+  - **`checks.md`:** it showed terminal colour codes (`[32m✓[39m`) in the Files tab. The gate strips them from `checks.log`, `checks.md` and the builder's hook message.
+  - **Timeouts:** the builder's checks run could hit Claude Code's 2-minute Bash default (once in 7 runs it set no timeout). The role now asks for `600000` ms. Its Stop hook gets an explicit `timeout: 1200`; a headless probe of the builder agent showed the hook loads and runs.
+  - **README:** it said the PR gets the `factory:needs-human` label. The issue does.
+- **Left for after the demo:** the apps that agents start in worktrees (builder, verifier, `/try`) use the dev database. Nothing was written to it so far, but a feature with a migration, or one that creates requests, would change Chris's demo data. The fix is a database per run.
+- **Tests:** factory checks 86, up 2 (colour codes stripped; the builder's two timeouts). Hooks 168 and pipeline 19 unchanged.
+- **Why this prevents a repeat:** each item comes from running the part, not reading it, and each fix has a check.

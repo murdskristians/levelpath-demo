@@ -29,6 +29,7 @@ import fnmatch
 import hashlib
 import json
 import os
+import re
 import shutil
 import socket
 import subprocess
@@ -148,10 +149,16 @@ def keep_earlier_run(round_dir):
     return sorted(p.name for p in round_dir.glob("checks-*.md"))
 
 
+# Terminal colour and screen codes: Vitest and Nest colour their output, and the codes
+# showed up as `[32m✓[39m` in checks.md, in the control room's Files tab and in the
+# builder's hook message.
+ANSI = re.compile(r"\x1b\[[0-9;?]*[ -/]*[@-~]")
+
+
 def run_checks(worktree):
     start = time.monotonic()
     res = subprocess.run([find_bash(), CHECKS.as_posix()], cwd=worktree, capture_output=True, text=True)
-    return res.returncode, res.stdout + res.stderr, int(time.monotonic() - start)
+    return res.returncode, ANSI.sub("", res.stdout + res.stderr), int(time.monotonic() - start)
 
 
 def gate(job_id):

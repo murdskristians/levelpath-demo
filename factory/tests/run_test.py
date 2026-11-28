@@ -69,6 +69,7 @@ config.pop("gate_services", None)
 (proj / "factory/checks.sh").write_text(
     '#!/usr/bin/env bash\nset -euo pipefail\n'
     'echo "checks ok ✓ ünïcode"\n'
+    "printf '\\033[2J\\033[32m\\342\\234\\223\\033[39m coloured line\\n'\n"
     'if [ -f FAIL_CHECKS ]; then echo "lint failed ✗"; exit 1; fi\n', encoding="utf-8", newline="\n")
 (proj / ".gitignore").write_text("/factory/jobs/\n/.worktrees/\n")
 (proj / "app.txt").write_text("hello\n")
@@ -188,6 +189,8 @@ r = sh([BASH, "-lc", f"factory/bin/gate {jid}"], proj, env=env)
 checks_md = (jd / "round-1/checks.md").read_text(encoding="utf-8")
 check("gate PASS", r.returncode == 0 and "GATE: PASS" in r.stdout, r.stdout + r.stderr)
 check("gate log keeps unicode", "checks ok ✓ ünïcode" in checks_md)
+check("gate strips colour codes from checks.md (they showed as [32m✓[39m in the Files tab)",
+      "✓ coloured line" in checks_md and "\x1b" not in checks_md, repr(checks_md[-200:]))
 r = sh([BASH, "-lc", f"factory/bin/gate {jid} --merge"], proj, env=env)
 check("gate has no --merge mode", r.returncode != 0 and not (jd / "round-1/merge-checks.md").exists(),
       r.stdout + r.stderr)
@@ -569,8 +572,12 @@ for text, is_error, kind, name, shown in cases:
 # `sleep N`, and run 72430acb's verifier lost a step to `sleep 25 && curl …`.
 for role in ["builder", "verifier"]:
     body = (SRC / ".claude/agents" / f"{role}.md").read_text(encoding="utf-8")
-    check(f"the {role} role waits for the app with curl --retry-connrefused, not sleep",
-          "--retry-connrefused" in body and not re.search(r"`[^`]*\bsleep \d", body), role)
+    check(f"the {role} role waits up to 5 minutes for the app with curl's retries, not sleep",
+          "--retry-connrefused" in body and "--retry-max-time 300" in body
+          and not re.search(r"`[^`]*\bsleep \d", body), role)
+builder_md = (SRC / ".claude/agents/builder.md").read_text(encoding="utf-8")
+check("the builder runs checks.sh with the 10-minute Bash timeout and has a 20-minute Stop hook",
+      "600000" in builder_md and "timeout: 1200" in builder_md)
 
 import http.client  # noqa: E402  (not urllib: with SSLKEYLOGFILE set it loads OpenSSL, which crashes on Windows)
 import threading  # noqa: E402

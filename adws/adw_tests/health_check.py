@@ -54,6 +54,14 @@ def factory():
     return "factory/bin/gate, factory/checks.sh"
 
 
+def postgres():
+    """The gate's services (config.json gate_services): without them no run starts."""
+    res = run(sys.executable, "-X", "utf8", str(REPO / "factory" / "bin" / "gate"), "--services")
+    if res.returncode != 0:
+        _fail((res.stderr.strip() or res.stdout.strip()).removeprefix("gate: "))
+    return "up (the API tests' database)"
+
+
 def browser():
     return shutil.which("agent-browser") or "not installed: the verifier won't be able to look at pages"
 
@@ -78,6 +86,7 @@ def main() -> int:
         ("claude CLI", claude_cli),
         ("uv", uv),
         ("the factory's gate", factory),
+        ("Postgres", postgres),
         ("agent-browser", browser),
     ]
     if "--call-claude" in sys.argv:

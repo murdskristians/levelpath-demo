@@ -48,8 +48,9 @@ rely on the earlier check, and then say so in the Summary.
   `API_PORT=<a> pnpm --filter @levelpath/web dev --port <w> --strictPort` (the
   web app needs `API_PORT` too: without it its proxy reaches port 3000, the
   main checkout's API, not the branch's). Wait until they answer with curl's
-  own retries, never with `sleep` (Claude Code blocks a bare `sleep N`):
-  `curl --retry 30 --retry-connrefused --retry-delay 2 -sf localhost:<a>/health`
+  own retries, never with `sleep` (Claude Code blocks a bare `sleep N`). The
+  API takes 1 to 2 minutes to compile and start, so allow up to 5:
+  `curl --retry 100 --retry-max-time 300 --retry-connrefused --retry-delay 2 -sf localhost:<a>/health`
   and the same for `localhost:<w>/`.
 - **API criteria:** call the endpoint with `curl` and compare the status and
   body with the spec. Try the obvious wrong inputs too: a missing field, a

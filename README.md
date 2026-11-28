@@ -58,7 +58,7 @@ Without the graph the harness still works: the agents fall back to searching, an
 - **The control room:** `factory/bin/serve`, then open http://127.0.0.1:8000. The **Board** shows every run, whichever driver started it. A run's **Agents** tab shows each agent's actions live, plus the orchestrator's decisions. The **prompt box** files an issue and starts an unattended run.
 - **Unattended (L3):** `uv run adws/adw_sdlc_iso.py <n>`, or start `uv run adws/adw_triggers/trigger_cron.py` and comment `adw` on the issue.
 
-Each driver ends with a pull request labelled `factory:needs-human`. To check it locally, run `/try <pr>`; then merge it on GitHub. Nothing in the harness can merge. Afterwards, `/factory run` (or `factory/bin/job queue`) closes out factory jobs; for an ADW run, use `uv run adws/adw_cleanup_iso.py <issue> <adw_id>`.
+Each driver ends with a ready pull request, and its issue labelled `factory:needs-human`. To check it locally, run `/try <pr>`; then merge it on GitHub. Nothing in the harness can merge. Afterwards, `/factory run` (or `factory/bin/job queue`) closes out factory jobs; for an ADW run, use `uv run adws/adw_cleanup_iso.py <issue> <adw_id>`.
 
 ### Where a run lives
 

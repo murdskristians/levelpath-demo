@@ -13,6 +13,8 @@ hooks:
     - hooks:
         - type: command
           command: '"$CLAUDE_PROJECT_DIR"/factory/bin/gate --hook'
+          # The full checks: about 3 minutes, about 10 when the branch changes the harness
+          timeout: 1200
 ---
 
 You build one job. Your prompt starts with the run's header (`Job: … Job
@@ -95,7 +97,8 @@ changes in the worktree. With the graph, a hook blocks your first read of
   `cd <worktree> && bash <main checkout>/factory/checks.sh`. It must pass: the
   gate runs exactly this after you, and no reviewer starts until it passes.
   Run it last, when every file, docs included, is in place: a file changed
-  after it is unchecked.
+  after it is unchecked. It takes 3 to 7 minutes, so give the Bash call the
+  longest timeout, `600000` ms: the 2-minute default kills it half way.
 - **A round that answers review findings or feedback:** run the checks for what
   you changed, not the whole suite again: `pnpm lint`, and
   `pnpm --filter <package> build` and `pnpm --filter <package> test` for each
@@ -112,7 +115,8 @@ command and its result, or what the page showed.
   without it its proxy reaches port 3000, the main checkout's API, not yours.
   Wait until they answer with curl's own retries, never with `sleep` (Claude
   Code blocks a bare `sleep N`):
-  `curl --retry 30 --retry-connrefused --retry-delay 2 -sf localhost:<a>/health`
+  `curl --retry 100 --retry-max-time 300 --retry-connrefused --retry-delay 2 -sf localhost:<a>/health`
+  (the API takes 1 to 2 minutes to compile and start; this allows 5)
   and the same for `localhost:<w>/`. Look at pages with the `agent-browser` CLI (run
   `agent-browser skills get core` first), passing `--session <job>-builder` on
   every call. When done: `agent-browser --session <job>-builder close`, then
